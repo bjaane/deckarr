@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<CommunityApplications>
+  <Profile>
+Deckarr is a free, self-hosted iPhone web app for your media server. It brings Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid together in one place you can add to your Home Screen.
+
+Report bugs and request features in GitHub Issues.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/bjaane/deckarr/main/public/icons/icon-512.png</Icon>
+  <WebPage>https://github.com/bjaane/deckarr</WebPage>
+</CommunityApplications>

@@ -1,0 +1,14 @@
+services:
+  deckarr:
+    image: ghcr.io/bjaane/deckarr:latest
+    # build: .   # use this instead of image to build from source
+    container_name: deckarr
+    restart: unless-stopped
+    ports:
+      - "8484:8484"
+    volumes:
+      - /mnt/user/appdata/deckarr:/config
+    environment:
+      PUID: "99"
+      PGID: "100"
+      # APP_PASSWORD: change-me   # optional fixed password

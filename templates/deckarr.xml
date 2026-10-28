@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Deckarr</Name>
+  <Repository>ghcr.io/bjaane/deckarr:latest</Repository>
+  <Registry>https://github.com/bjaane/deckarr/pkgs/container/deckarr</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Icon>https://raw.githubusercontent.com/bjaane/deckarr/main/public/icons/icon-512.png</Icon>
+  <WebUI>http://[IP]:[PORT:8484]/</WebUI>
+  <Overview>Deckarr is a free iPhone web app for your media server. Add it to your Home Screen and control Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid from one place: see what is coming up and downloading, add series, movies and artists, manage torrents, scan Jellyfin libraries, and start or stop containers and VMs. API keys stay on your server, and one password protects the app. After installing, open the WebUI on your phone, create a password, and add your services under Settings.</Overview>
+  <Support>https://github.com/bjaane/deckarr/issues</Support>
+  <Project>https://github.com/bjaane/deckarr</Project>
+  <TemplateURL>https://raw.githubusercontent.com/bjaane/deckarr/main/templates/deckarr.xml</TemplateURL>
+  <ReadMe>https://raw.githubusercontent.com/bjaane/deckarr/main/README.md</ReadMe>
+  <Category>MediaApp:Video Tools:Utilities</Category>
+  <ExtraSearchTerms>sonarr radarr lidarr prowlarr bazarr qbittorrent sabnzbd jellyfin ios iphone mobile pwa dashboard helmarr nzb360</ExtraSearchTerms>
+  <Requires>Unraid 7.2 or newer for the Unraid controls (containers, VMs, array). Everything else works on any version.</Requires>
+  <Changes>
+### 1.1.0
+- First public release
+  </Changes>
+  <Date>2026-10-28</Date>
+  <License>MIT</License>
+  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/home.png</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/library.png</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/server.png</Screenshot>
+  <Config Name="WebUI port" Target="8484" Default="8484" Mode="tcp" Description="Port for the web app. Open http://[your-unraid-ip]:[this port] on your phone." Type="Port" Display="always" Required="true" Mask="false">8484</Config>
+  <Config Name="Appdata" Target="/config" Default="/mnt/user/appdata/deckarr" Mode="rw" Description="Settings, password hash and service API keys." Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/deckarr</Config>
+  <Config Name="App password" Target="APP_PASSWORD" Default="" Description="Optional. Leave blank to create a password in the app on first launch (recommended)." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="PUID" Target="PUID" Default="99" Description="User ID the app runs as." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Description="Group ID the app runs as." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+</Container>
