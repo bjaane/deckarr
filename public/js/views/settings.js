@@ -173,6 +173,7 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
     const password = meta.auth === 'login'
       ? h('input', { type: 'password', placeholder: existing?.hasPassword ? 'Saved. Leave blank to keep it' : 'Password', ...secretAttrs })
       : null;
+    const backupUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.backupUrl || '', placeholder: `http://tower.tailnet.ts.net:${meta.port}`, ...secretAttrs });
     const webUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.webUrl || '', placeholder: 'Same as the address above', ...secretAttrs });
     let insecure = Boolean(existing?.insecure);
     const insecureSwitch = switchInput(insecure, (v) => (insecure = v), 'Allow self-signed certificate');
@@ -187,6 +188,7 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
         id: existing?.id,
         name: name.value.trim(),
         url: url.value.trim(),
+        backupUrl: backupUrl.value.trim(),
         webUrl: webUrl.value.trim(),
         insecure,
       };
@@ -205,7 +207,7 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
           h(
             'div',
             null,
-            h('div', { text: r.ok ? `Connected to ${meta.label}${r.version ? ` ${r.version}` : ''}` : r.error }),
+            h('div', { text: r.ok ? `Connected to ${meta.label}${r.version ? ` ${r.version}` : ''}${r.via === 'backup' ? ' using the backup address' : ''}` : r.error }),
             r.ok && r.detail ? h('div', { class: 'row-sub', text: r.detail }) : null,
           ),
         ),
@@ -266,6 +268,7 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
       h(
         'div',
         { class: 'list' },
+        field('Backup address', backupUrl),
         field('Web UI address', webUrl),
         h(
           'div',
@@ -274,6 +277,7 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
           insecureSwitch,
         ),
       ),
+      h('p', { class: 'hint', text: 'The backup address is used when the main address can’t be reached, for example a Tailscale name or another IP. Same API key.' }),
       h('p', { class: 'hint', text: `The web UI address is used for “Open ${meta.label}” links, for example your reverse proxy address. Leave it blank to use the address above.` }),
       result,
       h('div', { class: 'btn-row' }, testBtn, saveBtn),

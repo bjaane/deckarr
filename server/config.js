@@ -43,9 +43,12 @@ function normalize(input, existing) {
     type,
     name: str(pick('name'), 40).trim() || meta.label,
     url: normalizeUrl(pick('url'), 'Address', true),
+    backupUrl: normalizeUrl(pick('backupUrl'), 'Backup address', false),
     webUrl: normalizeUrl(pick('webUrl'), 'Web UI address', false),
     insecure: Boolean(pick('insecure')),
   };
+
+  if (service.backupUrl === service.url) service.backupUrl = '';
 
   if (meta.auth === 'login') {
     service.username = str(pick('username'), 200).trim();

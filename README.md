@@ -85,6 +85,10 @@ Don't forward port 8484 to the internet. Use one of these instead:
 
 Add the Home Screen icon from the address you'll use most, because the icon remembers that address.
 
+### Backup address for a service
+
+If Deckarr itself runs somewhere that isn't always on the same network as a service (for example on another machine, or a service on a second server), add a **Backup address** under *Optional* when you edit the service, such as a Tailscale name or IP (`http://tower.tailnet.ts.net:8989`). Deckarr tries the main address first and switches to the backup when the main one can't be reached. After a switch it keeps using the backup for 5 minutes before trying the main address again. The same API key or login is used for both.
+
 ---
 
 ## Settings
