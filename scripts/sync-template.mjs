@@ -31,16 +31,18 @@ if (sections[0]?.version !== version) {
 
 const xmlEscape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// The Apps tab shows plain text with simple markdown: keep headings and bullets, drop bold and code marks.
+// The Apps tab renders simple markdown. A list only shows as a list after a heading or a
+// blank line, so subsections become "####" headings followed by a blank line. Bold and code
+// marks are dropped.
 const changes = sections
   .slice(0, KEEP)
   .map((s) => {
     const body = s.body
-      .replace(/^### (.+)$/gm, '$1:')
+      .replace(/^### (.+)$/gm, '#### $1\n')
       .replace(/\*\*(.+?)\*\*/g, '$1')
       .replace(/`([^`]+)`/g, '$1')
-      .replace(/\n{2,}/g, '\n');
-    return `### ${s.version}\n${body}`;
+      .replace(/\n{3,}/g, '\n\n');
+    return `### ${s.version}\n\n${body}`;
   })
   .join('\n\n');
 
