@@ -13,7 +13,7 @@ A free, self-hosted iPhone web app for your media server. It runs as one small c
 | Home | Service status, the next 7 days of episodes, movies and albums, active downloads, and what's playing on Jellyfin |
 | Library | Browse Sonarr, Radarr and Lidarr. Search for releases, monitor titles or seasons, remove titles, add new series, movies and artists |
 | Activity | The *arr queue, qBittorrent (pause, resume, delete) and SABnzbd |
-| Server | Unraid array, CPU and RAM, start, stop and restart containers and VMs, Jellyfin library scan, Prowlarr indexer status, health warnings |
+| Server | Unraid array, CPU, RAM, CPU temperature and power, network traffic, UPS. Disks with temperatures and errors, shares, parity checks (start, pause, cancel, history), Unraid notifications (archive, delete), system logs. Containers: start, stop, restart, pause, update (one or all), details, ports and logs, filters and batch actions. VMs: start, shut down, pause, resume, restart, force stop. Jellyfin library scan, Prowlarr indexer status, health warnings |
 | Settings | Add services, test connections, change the password |
 
 Supported services: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid 7.2+.
@@ -70,9 +70,9 @@ The container fixes the permissions of `/config` itself and then runs as `PUID`/
 | Sonarr, Radarr, Lidarr, Prowlarr | Settings > General > Security > API Key |
 | Bazarr | Settings > General > Security > API Key |
 | SABnzbd | Config > General > Security > API Key (not the NZB key) |
-| qBittorrent | Web UI username and password. Leave both blank if qBittorrent skips login for your subnet |
+| qBittorrent | qBittorrent 5.2+: an API key from Tools > Options > Web UI. Older versions: Web UI username and password, or leave both blank if qBittorrent skips login for your subnet |
 | Jellyfin | Dashboard > API Keys > New API key |
-| Unraid 7.2+ | Settings > Management Access > API Keys. Use the Admin role, or read and update access to Docker, VMs and Array |
+| Unraid 7.2+ | Settings > Management Access > API Keys. Use the Admin role, or read access to everything plus update access to Docker, VMs, Array and Notifications (needed for container, VM, parity and notification actions) |
 
 ---
 
@@ -84,6 +84,10 @@ Don't forward port 8484 to the internet. Use one of these instead:
 - **Reverse proxy with HTTPS** (Nginx Proxy Manager, SWAG, Caddy): point it at port 8484. Sub-paths such as `https://example.com/deckarr/` work. Pass `X-Forwarded-Proto` so the session cookie is marked secure.
 
 Add the Home Screen icon from the address you'll use most, because the icon remembers that address.
+
+### Backup address for a service
+
+If Deckarr itself runs somewhere that isn't always on the same network as a service (for example on another machine, or a service on a second server), add a **Backup address** under *Optional* when you edit the service, such as a Tailscale name or IP (`http://tower.tailnet.ts.net:8989`). Deckarr tries the main address first and switches to the backup when the main one can't be reached. After a switch it keeps using the backup for 5 minutes before trying the main address again. The same API key or login is used for both.
 
 ---
 
@@ -103,6 +107,10 @@ Forgot the password? Stop the container, delete `auth.json` in the appdata folde
 ## Update
 
 Unraid shows **Update ready** on the Docker tab when a new version is published. Click it. Your settings are kept.
+
+### Run the test version
+
+Every push to the `test` branch publishes `ghcr.io/bjaane/deckarr:test`. To use it, open **Docker**, click the Deckarr icon > **Edit**, set **Repository** to `ghcr.io/bjaane/deckarr:test`, and click **Apply**. Unraid then shows **Update ready** whenever a new test build is published. Set it back to `ghcr.io/bjaane/deckarr:latest` to return to releases.
 
 ## Back up
 

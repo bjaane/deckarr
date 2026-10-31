@@ -528,13 +528,38 @@ async function gql(s, query, variables) {
 
 const ok = (p) => p.then((v) => v, () => null);
 
+// Runs the first query the server understands. Older Unraid releases lack some fields.
+async function gqlFirst(s, queries, variables) {
+  for (let i = 0; i < queries.length; i += 1) {
+    try {
+      return await gql(s, queries[i], variables);
+    } catch (err) {
+      if (i === queries.length - 1 || !/Cannot query field|Unknown argument|Unknown type/i.test(err.message)) throw err;
+    }
+  }
+  return null;
+}
+
+const DISK_FIELDS = 'id idx name device size status temp numErrors fsSize fsUsed fsFree fsType type isSpinning rotational warning critical';
+const CONTAINER_BASE = 'id names image state status autoStart';
+
+export const DOCKER_ACTIONS = ['start', 'stop', 'restart', 'pause', 'unpause', 'updateContainer'];
+export const VM_ACTIONS = ['start', 'stop', 'pause', 'resume', 'reboot', 'forceStop'];
+
 export const unraid = {
   async overview(s) {
-    const [array, info, metrics, parity] = await Promise.all([
+    const [array, info, metrics, parity, extra, power, notes, ups] = await Promise.all([
       gql(s, '{ array { state capacity { kilobytes { free used total } } } }'),
       ok(gql(s, '{ info { os { hostname uptime } } }')),
-      ok(gql(s, '{ metrics { cpu { percentTotal } memory { total used available percentTotal } } }')),
-      ok(gql(s, '{ array { parityCheckStatus { status progress running paused } } }')),
+      ok(gqlFirst(s, [
+        '{ metrics { cpu { percentTotal } memory { total used available percentTotal swapTotal swapUsed } } }',
+        '{ metrics { cpu { percentTotal } memory { total used available percentTotal } } }',
+      ])),
+      ok(gql(s, '{ array { parityCheckStatus { status progress running paused correcting errors } } }')),
+      ok(gql(s, '{ metrics { network { name rxSec txSec } temperature { summary { hottest { name current { value } } } sensors { name type current { value } } } } }')),
+      ok(gql(s, '{ info { cpu { packages { totalPower temp } } } }')),
+      ok(gql(s, '{ notifications { overview { unread { info warning alert total } } } }')),
+      ok(gql(s, '{ upsDevices { id name model status battery { chargeLevel estimatedRuntime } power { loadPercentage currentPower } } }')),
     ]);
     return {
       array: array?.array,
@@ -543,22 +568,37 @@ export const unraid = {
       cpu: metrics?.metrics?.cpu,
       memory: metrics?.metrics?.memory,
       parity: parity?.array?.parityCheckStatus,
+      network: extra?.metrics?.network || [],
+      temperature: extra?.metrics?.temperature || null,
+      packages: power?.info?.cpu?.packages || null,
+      unread: notes?.notifications?.overview?.unread || null,
+      ups: ups?.upsDevices || [],
     };
   },
+
+  // ----- Docker -----
   async containers(s) {
-    try {
-      const d = await gql(s, '{ docker { containers { id names image state status autoStart webUiUrl iconUrl } } }');
-      return d.docker?.containers || [];
-    } catch (err) {
-      if (!/Cannot query field/i.test(err.message)) throw err;
-      const d = await gql(s, '{ docker { containers { id names image state status autoStart } } }');
-      return d.docker?.containers || [];
-    }
+    const d = await gqlFirst(s, [
+      `{ docker { containers { ${CONTAINER_BASE} webUiUrl iconUrl isUpdateAvailable ports { privatePort publicPort type } } } }`,
+      `{ docker { containers { ${CONTAINER_BASE} webUiUrl iconUrl ports { privatePort publicPort type } } } }`,
+      `{ docker { containers { ${CONTAINER_BASE} webUiUrl iconUrl } } }`,
+      `{ docker { containers { ${CONTAINER_BASE} } } }`,
+    ]);
+    return d.docker?.containers || [];
   },
   dockerAction(s, action, id) {
-    if (!['start', 'stop', 'restart'].includes(action)) throw new Error('Unknown action');
+    if (!DOCKER_ACTIONS.includes(action)) throw new Error('Unknown action');
     return gql(s, `mutation ($id: PrefixedID!) { docker { ${action}(id: $id) { id state status } } }`, { id });
   },
+  updateContainers(s, ids) {
+    return gql(s, 'mutation ($ids: [PrefixedID!]!) { docker { updateContainers(ids: $ids) { id state } } }', { ids });
+  },
+  async containerLogs(s, id, tail = 200) {
+    const d = await gql(s, 'query ($id: PrefixedID!, $tail: Int) { docker { logs(id: $id, tail: $tail) { lines { timestamp message } } } }', { id, tail });
+    return d.docker?.logs?.lines || [];
+  },
+
+  // ----- VMs -----
   async vms(s) {
     try {
       const d = await gql(s, '{ vms { domains { id name state } } }');
@@ -568,7 +608,59 @@ export const unraid = {
     }
   },
   vmAction(s, action, id) {
-    if (!['start', 'stop'].includes(action)) throw new Error('Unknown action');
+    if (!VM_ACTIONS.includes(action)) throw new Error('Unknown action');
     return gql(s, `mutation ($id: PrefixedID!) { vm { ${action}(id: $id) } }`, { id });
+  },
+
+  // ----- storage -----
+  async disks(s) {
+    const d = await gqlFirst(s, [
+      `{ array { parities { ${DISK_FIELDS} } disks { ${DISK_FIELDS} } caches { ${DISK_FIELDS} } } }`,
+      '{ array { parities { id name device size status temp numErrors type } disks { id name device size status temp numErrors fsSize fsUsed fsFree type } caches { id name device size status temp numErrors fsSize fsUsed fsFree type } } }',
+    ]);
+    return d.array;
+  },
+  async shares(s) {
+    const d = await gqlFirst(s, ['{ shares { id name comment free used size cache } }', '{ shares { id name free used size } }']);
+    return d.shares || [];
+  },
+
+  // ----- parity -----
+  async parity(s) {
+    const [status, history] = await Promise.all([
+      gql(s, '{ array { parityCheckStatus { status progress running paused correcting errors speed duration date } } }'),
+      ok(gql(s, '{ parityHistory { date duration speed status errors } }')),
+    ]);
+    return { status: status.array?.parityCheckStatus, history: history?.parityHistory || null };
+  },
+  parityAction(s, action, correct = false) {
+    if (action === 'start') return gql(s, 'mutation ($correct: Boolean!) { parityCheck { start(correct: $correct) } }', { correct });
+    if (!['pause', 'resume', 'cancel'].includes(action)) throw new Error('Unknown action');
+    return gql(s, `mutation { parityCheck { ${action} } }`);
+  },
+
+  // ----- notifications -----
+  async notifications(s, type = 'UNREAD', limit = 100) {
+    const d = await gql(
+      s,
+      'query ($filter: NotificationFilter!) { notifications { overview { unread { total } archive { total } } list(filter: $filter) { id title subject description importance link type timestamp } } }',
+      { filter: { type, offset: 0, limit } },
+    );
+    return d.notifications;
+  },
+  archiveNotification: (s, id) => gql(s, 'mutation ($id: PrefixedID!) { archiveNotification(id: $id) { id } }', { id }),
+  unreadNotification: (s, id) => gql(s, 'mutation ($id: PrefixedID!) { unreadNotification(id: $id) { id } }', { id }),
+  deleteNotification: (s, id, type) => gql(s, 'mutation ($id: PrefixedID!, $type: NotificationType!) { deleteNotification(id: $id, type: $type) { unread { total } } }', { id, type }),
+  archiveAll: (s) => gql(s, 'mutation { archiveAll { unread { total } } }'),
+  deleteArchived: (s) => gql(s, 'mutation { deleteArchivedNotifications { archive { total } } }'),
+
+  // ----- logs -----
+  async logFiles(s) {
+    const d = await gql(s, '{ logFiles { name path size modifiedAt } }');
+    return d.logFiles || [];
+  },
+  async logFile(s, path, lines = 300) {
+    const d = await gql(s, 'query ($path: String!, $lines: Int) { logFile(path: $path, lines: $lines) { content totalLines } }', { path, lines });
+    return d.logFile;
   },
 };

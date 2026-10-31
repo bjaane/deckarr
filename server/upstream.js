@@ -4,11 +4,18 @@ import { SERVICE_TYPES } from './types.js';
 
 const MAX_BYTES = 64 * 1024 * 1024; // big Sonarr libraries can be tens of MB of JSON
 const qbitSessions = new Map(); // service id -> cookie header
+const preferBackup = new Map(); // service id -> time until which the backup address is tried first
+const PREFER_BACKUP_MS = 5 * 60 * 1000;
+
+const CONNECT_TIMEOUT_MS = 4000;
+
+// Errors raised before a connection exists, so the request was never sent and the backup address is safe to try.
+const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'CONNECT_TIMEOUT']);
 
 export class UpstreamError extends Error {}
 
 /** Minimal HTTP(S) client with per-request TLS verification control. */
-export function rawRequest(urlStr, { method = 'GET', headers = {}, body = null, insecure = false, timeout = 20000 } = {}) {
+export function rawRequest(urlStr, { method = 'GET', headers = {}, body = null, insecure = false, timeout = 20000, connectTimeout = 0 } = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
     const lib = url.protocol === 'https:' ? https : http;
@@ -36,6 +43,18 @@ export function rawRequest(urlStr, { method = 'GET', headers = {}, body = null, 
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
       res.on('error', reject);
     });
+    if (connectTimeout) {
+      req.on('socket', (socket) => {
+        if (!socket.connecting) return;
+        const timer = setTimeout(() => {
+          const err = new Error('connect timeout');
+          err.code = 'CONNECT_TIMEOUT';
+          req.destroy(err);
+        }, connectTimeout);
+        socket.once('connect', () => clearTimeout(timer));
+        socket.once('close', () => clearTimeout(timer));
+      });
+    }
     req.on('timeout', () => {
       const err = new Error('timeout');
       err.code = 'TIMEOUT';
@@ -47,8 +66,8 @@ export function rawRequest(urlStr, { method = 'GET', headers = {}, body = null, 
   });
 }
 
-function buildUrl(service, path, query) {
-  const base = new URL(service.url);
+function buildUrl(service, path, query, baseUrl = service.url) {
+  const base = new URL(baseUrl);
   const basePath = base.pathname.replace(/\/+$/, '');
   const cleanPath = '/' + String(path || '').replace(/^\/+/, '');
   const url = new URL(base.origin + basePath + cleanPath);
@@ -56,14 +75,15 @@ function buildUrl(service, path, query) {
   return url;
 }
 
-async function qbitLogin(service) {
-  const url = buildUrl(service, '/api/v2/auth/login');
+async function qbitLogin(service, baseUrl) {
+  const url = buildUrl(service, '/api/v2/auth/login', '', baseUrl);
   const body = new URLSearchParams({ username: service.username || '', password: service.password || '' }).toString();
   const res = await rawRequest(url.href, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', referer: url.origin },
     body,
     insecure: service.insecure,
+    connectTimeout: service.backupUrl ? CONNECT_TIMEOUT_MS : 0,
   });
   const text = res.body.toString('utf8').trim();
   if (res.status === 403) {
@@ -81,11 +101,44 @@ async function qbitLogin(service) {
 
 export function clearSession(serviceId) {
   qbitSessions.delete(serviceId);
+  preferBackup.delete(serviceId);
 }
 
-/** Calls a service with its credentials injected. Returns { status, headers, body }. */
-export async function callService(service, { method = 'GET', path = '/', query = '', body = null, contentType = null, timeout, retry = true } = {}) {
-  const url = buildUrl(service, path, query);
+/** Addresses to try, in order. The backup goes first for a while after the main address failed. */
+function addresses(service) {
+  if (!service.backupUrl) return [service.url];
+  return (preferBackup.get(service.id) || 0) > Date.now() ? [service.backupUrl, service.url] : [service.url, service.backupUrl];
+}
+
+/**
+ * Calls a service with its credentials injected, falling back to the backup address
+ * when the main one can't be reached. Returns { status, headers, body, via }.
+ */
+export async function callService(service, opts = {}) {
+  const list = addresses(service);
+  let mainErr;
+  for (const baseUrl of list) {
+    try {
+      const res = await callAt(service, baseUrl, opts);
+      if (baseUrl === service.backupUrl) preferBackup.set(service.id, Date.now() + PREFER_BACKUP_MS);
+      else preferBackup.delete(service.id);
+      res.via = baseUrl === service.url ? 'main' : 'backup';
+      return res;
+    } catch (err) {
+      if (!UNREACHABLE.has(err.code)) {
+        err.baseUrl = baseUrl;
+        throw err;
+      }
+      err.baseUrl = baseUrl;
+      if (baseUrl === service.url) mainErr = err;
+    }
+  }
+  if (list.length > 1) mainErr.triedBoth = true;
+  throw mainErr;
+}
+
+async function callAt(service, baseUrl, { method = 'GET', path = '/', query = '', body = null, contentType = null, timeout, retry = true } = {}) {
+  const url = buildUrl(service, path, query, baseUrl);
   const headers = { accept: 'application/json, text/plain, */*' };
   if (contentType) headers['content-type'] = contentType;
 
@@ -99,34 +152,37 @@ export async function callService(service, { method = 'GET', path = '/', query =
       break;
     case 'qbittorrent':
       headers.referer = url.origin;
-      if (service.username) {
-        headers.cookie = qbitSessions.get(service.id) || (await qbitLogin(service));
+      if (service.apiKey) {
+        headers.authorization = `Bearer ${service.apiKey}`;
+      } else if (service.username) {
+        headers.cookie = qbitSessions.get(service.id) || (await qbitLogin(service, baseUrl));
       }
       break;
     default:
       headers['x-api-key'] = service.apiKey || '';
   }
 
-  const res = await rawRequest(url.href, { method, headers, body, insecure: service.insecure, timeout });
+  const connectTimeout = service.backupUrl ? CONNECT_TIMEOUT_MS : 0;
+  const res = await rawRequest(url.href, { method, headers, body, insecure: service.insecure, timeout, connectTimeout });
 
-  if (service.type === 'qbittorrent' && res.status === 403 && service.username && retry) {
+  if (service.type === 'qbittorrent' && res.status === 403 && !service.apiKey && service.username && retry) {
     qbitSessions.delete(service.id);
-    return callService(service, { method, path, query, body, contentType, timeout, retry: false });
+    return callAt(service, baseUrl, { method, path, query, body, contentType, timeout, retry: false });
   }
   return res;
 }
 
-function hostOf(service) {
+function hostOf(url) {
   try {
-    return new URL(service.url).host;
+    return new URL(url).host;
   } catch {
-    return service.url;
+    return url;
   }
 }
 
 export function credentialMessage(service) {
   const meta = SERVICE_TYPES[service.type];
-  if (meta?.auth === 'login') {
+  if (meta?.auth === 'login' && !service.apiKey) {
     return service.username
       ? `${service.name} rejected the username or password. Update them in Settings.`
       : `${service.name} needs a username and password. Add them in Settings.`;
@@ -137,7 +193,11 @@ export function credentialMessage(service) {
 /** Turns low-level network errors into something a person can act on. */
 export function describeError(err, service) {
   if (err instanceof UpstreamError) return err.message;
-  const host = hostOf(service);
+  const message = describeNetworkError(err, service, hostOf(err.baseUrl || service.url));
+  return err.triedBoth ? `${message} The backup address didn't answer either.` : message;
+}
+
+function describeNetworkError(err, service, host) {
   switch (err.code) {
     case 'ECONNREFUSED':
       return `Nothing is answering at ${host}. Check the address and that ${service.name} is running.`;
@@ -150,6 +210,8 @@ export function describeError(err, service) {
     case 'ECONNRESET':
     case 'EPIPE':
       return `${service.name} closed the connection. If it uses HTTPS, make sure the address starts with https://.`;
+    case 'CONNECT_TIMEOUT':
+      return `Couldn't connect to ${host} in time. Check the address.`;
     case 'TIMEOUT':
     case 'ETIMEDOUT':
       return `${service.name} took too long to answer.`;
@@ -176,7 +238,8 @@ export async function testService(service, timeout = 8000) {
   const t = meta.test;
   const started = Date.now();
   const fail = (error) => ({ ok: false, error });
-  const ok = (version, detail) => ({ ok: true, version: version || null, detail: detail || null, ms: Date.now() - started });
+  let via = 'main';
+  const ok = (version, detail) => ({ ok: true, version: version || null, detail: detail || null, via, ms: Date.now() - started });
 
   try {
     const res = await callService(service, {
@@ -187,6 +250,7 @@ export async function testService(service, timeout = 8000) {
       contentType: t.body ? 'application/json' : null,
       timeout,
     });
+    via = res.via;
 
     if (res.status >= 300 && res.status < 400) {
       return fail(`${service.name} redirected to ${res.headers.location || 'another address'}. Use that address instead.`);
