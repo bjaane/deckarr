@@ -8,13 +8,13 @@
   <Privileged>false</Privileged>
   <Icon>https://raw.githubusercontent.com/bjaane/deckarr/main/public/icons/icon-512.png</Icon>
   <WebUI>http://[IP]:[PORT:8484]/</WebUI>
-  <Overview>Deckarr is a free iPhone web app for your media server. Add it to your Home Screen and control Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid from one place: see what is coming up and downloading, add series, movies and artists, manage torrents, scan Jellyfin libraries, and start or stop containers and VMs. API keys stay on your server, and one password protects the app. After installing, open the WebUI on your phone, create a password, and add your services under Settings.</Overview>
+  <Overview>Deckarr is a free web app for your media server, made for phones and tablets: iPhone, iPad, Android (including GrapheneOS) and any modern browser. Add it to your home screen and control Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid from one place: see what is coming up and downloading, add series, movies and artists, manage torrents, scan Jellyfin libraries, and start or stop containers and VMs. API keys stay on your server, and one password protects the app. After installing, open the WebUI on your phone, create a password, and add your services under Settings.</Overview>
   <Support>https://github.com/bjaane/deckarr/issues</Support>
   <Project>https://github.com/bjaane/deckarr</Project>
   <TemplateURL>https://raw.githubusercontent.com/bjaane/deckarr/main/templates/deckarr.xml</TemplateURL>
   <ReadMe>https://raw.githubusercontent.com/bjaane/deckarr/main/README.md</ReadMe>
   <Category>MediaApp:Video Tools:Utilities</Category>
-  <ExtraSearchTerms>sonarr radarr lidarr prowlarr bazarr qbittorrent sabnzbd jellyfin ios iphone mobile pwa dashboard helmarr nzb360</ExtraSearchTerms>
+  <ExtraSearchTerms>sonarr radarr lidarr prowlarr bazarr qbittorrent sabnzbd jellyfin ios iphone ipad android grapheneos mobile pwa dashboard helmarr nzb360</ExtraSearchTerms>
   <Requires>Unraid 7.2 or newer for the Unraid controls (containers, VMs, array). Everything else works on any version.</Requires>
   <Changes>
 ### 1.1.0

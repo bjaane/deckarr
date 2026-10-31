@@ -1,7 +1,7 @@
 {
   "name": "deckarr",
-  "version": "1.3.0",
-  "description": "Free, self-hosted iPhone web app for Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid.",
+  "version": "1.4.0",
+  "description": "Free, self-hosted phone and tablet web app (iPhone, Android and more) for Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid.",
   "type": "module",
   "private": true,
   "license": "MIT",

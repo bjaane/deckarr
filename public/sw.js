@@ -1,5 +1,5 @@
 // Keeps the app shell available offline. API calls always go to the network.
-const CACHE = 'deckarr-v1.3.0';
+const CACHE = 'deckarr-v1.4.0';
 const SHELL = [
   './',
   'index.html',
@@ -8,6 +8,7 @@ const SHELL = [
   'js/app.js',
   'js/api.js',
   'js/ui.js',
+  'js/install.js',
   'js/services.js',
   'js/views/home.js',
   'js/views/library.js',

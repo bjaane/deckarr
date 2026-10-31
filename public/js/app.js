@@ -1,4 +1,5 @@
 import { api, events } from './api.js';
+import './install.js';
 import { h, icon, notice } from './ui.js';
 import * as home from './views/home.js';
 import * as library from './views/library.js';
@@ -100,7 +101,7 @@ function renderShell() {
     { class: 'tabbar', 'aria-label': 'Sections' },
     TABS.map((t) => {
       const link = h('a', { class: 'tab', href: `#/${t.id}` }, icon(t.icon, 25), h('span', { text: t.label }));
-      // Tapping the tab you're on scrolls to the top, like iOS.
+      // Tapping the tab you're on scrolls to the top.
       link.addEventListener('click', (e) => {
         if (current.id === t.id && location.hash.startsWith(`#/${t.id}`)) {
           e.preventDefault();
