@@ -108,6 +108,10 @@ Forgot the password? Stop the container, delete `auth.json` in the appdata folde
 
 Unraid shows **Update ready** on the Docker tab when a new version is published. Click it. Your settings are kept.
 
+### Run the test version
+
+Every push to the `test` branch publishes `ghcr.io/bjaane/deckarr:test`. To use it, open **Docker**, click the Deckarr icon > **Edit**, set **Repository** to `ghcr.io/bjaane/deckarr:test`, and click **Apply**. Unraid then shows **Update ready** whenever a new test build is published. Set it back to `ghcr.io/bjaane/deckarr:latest` to return to releases.
+
 ## Back up
 
 Back up `/mnt/user/appdata/deckarr`. It contains your API keys, so treat it like a password file.
