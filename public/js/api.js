@@ -34,8 +34,10 @@ function upstreamMessage(data) {
   return data.message || data.title || null;
 }
 
-export async function api(path, { method = 'GET', body, form, signal } = {}) {
+export async function api(path, { method = 'GET', body, form, signal, timeout } = {}) {
   const opts = { method, signal, credentials: 'same-origin', headers: { 'X-Requested-With': 'deckarr' } };
+  // Lets slow upstream calls (pulling a Docker image) run longer than the usual 20 seconds.
+  if (timeout) opts.headers['X-Deckarr-Timeout'] = String(Math.round(timeout / 1000));
   if (form) {
     opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
     opts.body = new URLSearchParams(form).toString();

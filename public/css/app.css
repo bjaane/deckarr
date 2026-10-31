@@ -1398,3 +1398,11 @@ a.row:active {
 .container-list .btn-row {
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
+
+.vm-row {
+  cursor: pointer;
+}
+
+.updates .notice-body > div:first-child {
+  white-space: pre-line;
+}

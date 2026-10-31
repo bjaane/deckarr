@@ -2,6 +2,14 @@
 
 Releases are published automatically: bump `version` in `package.json`, add a section for it here, and merge into `main`.
 
+## 1.3.0
+
+### New
+- **Container updates.** The Containers section shows how many updates are available. **Check now** asks Unraid to look for new images right away, and **Update all** updates them one by one with live progress. Containers with an update get an Update badge, and failures are listed without stopping the rest. Updates may take up to 10 minutes per container. On Unraid versions that can report updates but not apply them through the API, Deckarr says so and links to the Docker tab.
+
+### Improved
+- **Virtual machines.** The VM section appears only when Unraid has VMs. Each VM opens a sheet with Shut down, Restart, Pause, Resume, Force stop and Hard reset. Stopped VMs have a Start button in the list, and there are buttons to start or shut down several VMs at once. If the API key can't read VMs, Deckarr says how to fix it.
+
 ## 1.2.0
 
 ### New

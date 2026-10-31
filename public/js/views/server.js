@@ -1,6 +1,6 @@
-import { h, light, bar, fmt, pageHead, section, skeletonList, notice, emptyState, searchField, chips, actionSheet, confirmAction, runAction, initials, toast, chevron } from '../ui.js';
-import { unraid, jellyfin, prowlarr, healthIssues, byType, webBase } from '../services.js';
-import { openDisks, openShares, openParity, openNotifications, openLogs, openContainer } from './unraid.js';
+import { h, light, bar, fmt, pageHead, section, skeletonList, notice, emptyState, searchField, chips, confirmAction, runAction, initials, toast, chevron } from '../ui.js';
+import { unraid, jellyfin, prowlarr, healthIssues, byType, webBase, vmErrorMessage } from '../services.js';
+import { openDisks, openShares, openParity, openNotifications, openLogs, openContainer, openVm, runVmAction, vmState, vmRunning, vmPaused } from './unraid.js';
 
 export function render(root, ctx) {
   const { services } = ctx.state;
@@ -32,14 +32,22 @@ export function render(root, ctx) {
     const overview = section(unraids.length > 1 ? s.name : 'Array');
     const manage = section('Manage');
     const containers = section('Containers');
+    // Shown only once Unraid reports at least one VM.
     const vms = section('Virtual machines');
     vms.el.hidden = true;
-    root.append(overview.el, manage.el, containers.el, vms.el);
+    root.append(overview.el, manage.el, vms.el, containers.el);
 
     let query = '';
     let filter = 'all';
     let list = null;
     let last = null;
+    // Container updates: progress of a running batch, the last check time and any failures.
+    const updatesEl = h('div', { class: 'updates' });
+    let updating = null; // { queue: [c], index, current }
+    let checking = false;
+    let checkedAt = null;
+    let updateFailures = [];
+    let cannotApply = null; // set when this Unraid can report updates but not apply them
     const search = searchField('Search containers', (v) => {
       query = v;
       drawContainers();
@@ -158,8 +166,134 @@ export function render(root, ctx) {
       }
     }
 
+    const updatesSupported = () => Boolean(list?.some((c) => 'isUpdateAvailable' in c));
+
+    function drawUpdates() {
+      if (!list) return;
+      const pending = list.filter((c) => c.isUpdateAvailable);
+      const nodes = [];
+      if (!updatesSupported()) {
+        nodes.push(
+          h(
+            'div',
+            { class: 'list' },
+            h(
+              'div',
+              { class: 'row' },
+              light(''),
+              h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: 'Update checks aren’t available' }), h('span', { class: 'row-sub wrap', text: 'This Unraid version doesn’t report container updates through its API. Use the Docker tab in Unraid.' })),
+            ),
+          ),
+        );
+      } else if (updating) {
+        const { queue, index, current } = updating;
+        nodes.push(
+          h(
+            'div',
+            { class: 'list' },
+            h(
+              'div',
+              { class: 'panel' },
+              h('div', { class: 'panel-title' }, light('active'), `Updating ${current} (${index + 1} of ${queue.length})`),
+              bar(index / queue.length),
+              h('div', { class: 'panel-sub', text: 'Pulling the new image and restarting the container. Keep this page open.' }),
+            ),
+          ),
+        );
+      } else {
+        const check = h('button', { type: 'button', class: 'btn btn-small' }, checking ? 'Checking…' : 'Check now');
+        check.disabled = checking;
+        check.addEventListener('click', checkUpdates);
+        const buttons = [check];
+        if (pending.length && cannotApply) {
+          buttons.push(h('a', { class: 'btn btn-small btn-primary', href: `${webBase(s)}/Docker`, target: '_blank', rel: 'noopener' }, 'Update in Unraid'));
+        } else if (pending.length) {
+          const all = h('button', { type: 'button', class: 'btn btn-small btn-primary' }, pending.length === 1 ? 'Update' : `Update all ${pending.length}`);
+          all.addEventListener('click', async () => {
+            const ok = await confirmAction({
+              title: pending.length === 1 ? `Update ${cname(pending[0])}?` : `Update ${pending.length} containers?`,
+              message: `${pending.map(cname).join(', ')}. Each one pulls its new image and restarts.`,
+              label: 'Update',
+              destructive: false,
+            });
+            if (ok) runUpdates(pending);
+          });
+          buttons.push(all);
+        }
+        const title = pending.length ? `${fmt.count(pending.length, 'update')} available` : 'All containers are up to date';
+        const sub = checking ? 'Asking the registries for new images…' : checkedAt ? `Checked at ${fmt.time(checkedAt)}` : 'Unraid checks for updates on its own schedule. Tap Check now to check right away.';
+        nodes.push(
+          h(
+            'div',
+            { class: 'list' },
+            h('div', { class: 'row' }, light(pending.length ? 'warn' : 'ok'), h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: title }), h('span', { class: 'row-sub wrap', text: sub }))),
+          ),
+          h('div', { class: 'btn-row' }, buttons),
+        );
+        if (cannotApply) {
+          nodes.push(h('div', { style: { marginTop: '12px' } }, notice(cannotApply, { kind: 'warn' })));
+        } else if (updateFailures.length) {
+          nodes.push(
+            h('div', { style: { marginTop: '12px' } }, notice(updateFailures.map((f) => `${f.name}: ${f.error}`).join('\n'), { kind: 'warn' })),
+          );
+        }
+      }
+      updatesEl.replaceChildren(...nodes);
+    }
+
+    async function checkUpdates() {
+      if (checking || updating) return;
+      checking = true;
+      drawUpdates();
+      try {
+        await unraid.checkUpdates(s);
+        checkedAt = new Date();
+        await loadContainers();
+        const n = list?.filter((c) => c.isUpdateAvailable).length || 0;
+        toast(n ? `${fmt.count(n, 'update')} available` : 'All containers are up to date');
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally {
+        checking = false;
+        drawUpdates();
+      }
+    }
+
+    // One container at a time, so progress is visible and one failure doesn't stop the rest.
+    async function runUpdates(targets) {
+      if (updating) return;
+      updateFailures = [];
+      updating = { queue: targets, index: 0, current: cname(targets[0]) };
+      drawContainers();
+      let done = 0;
+      for (let i = 0; i < targets.length; i += 1) {
+        updating = { queue: targets, index: i, current: cname(targets[i]) };
+        drawContainers();
+        try {
+          await unraid.updateContainer(s, targets[i].id);
+          done += 1;
+        } catch (err) {
+          updateFailures.push({ name: cname(targets[i]), error: err.message });
+          // An API that can't update at all will fail the same way for every container.
+          if (/needs Unraid API/.test(err.message)) {
+            cannotApply = err.message;
+            updateFailures = [];
+            break;
+          }
+        }
+      }
+      updating = null;
+      await loadContainers();
+      drawContainers();
+      if (cannotApply && !done) toast('Unraid can’t apply updates through its API', 'bad');
+      else if (!updateFailures.length) toast(done === 1 ? `Updated ${cname(targets[0])}` : `Updated ${done} containers`);
+      else toast(done ? `Updated ${done}, ${updateFailures.length} failed` : 'Update failed', 'bad');
+      return !updateFailures.length;
+    }
+
     function drawContainers() {
       if (!list) return;
+      drawUpdates();
       const running = list.filter((c) => c.state === 'RUNNING');
       const stopped = list.filter((c) => c.state !== 'RUNNING');
       const updates = list.filter((c) => c.isUpdateAvailable);
@@ -179,25 +313,18 @@ export function render(root, ctx) {
       const rows = shown.map((c) => {
         const name = cname(c);
         const state = c.state === 'RUNNING' ? 'ok' : c.state === 'PAUSED' ? 'warn' : '';
+        const busy = updating?.queue[updating.index]?.id === c.id;
         return h(
           'button',
           { type: 'button', class: 'row has-lead', onClick: () => containerActions(c) },
           containerIcon(s, c),
-          h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: name }), h('span', { class: 'row-sub', text: [c.status || c.state, c.isUpdateAvailable ? 'Update available' : null].filter(Boolean).join(' · ') })),
-          light(state),
+          h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: name }), h('span', { class: 'row-sub', text: busy ? 'Updating…' : c.status || c.state })),
+          c.isUpdateAvailable && !busy ? h('span', { class: 'tag warn', text: 'Update' }) : null,
+          light(busy ? 'active' : state),
         );
       });
 
       const tools = [];
-      if (filter === 'updates' && updates.length) {
-        const all = h('button', { type: 'button', class: 'btn btn-small btn-primary' }, `Update ${fmt.count(updates.length, 'container')}`);
-        all.addEventListener('click', async () => {
-          if (!(await confirmAction({ title: `Update ${fmt.count(updates.length, 'container')}?`, message: 'Each container is pulled again and restarted.', label: 'Update', destructive: false }))) return;
-          await runAction(all, () => unraid.updateContainers(s, updates.map((c) => c.id)), { success: 'Updates finished' });
-          loadContainers();
-        });
-        tools.push(h('div', { class: 'btn-row' }, all));
-      }
       if (running.length) {
         const stopAll = h('button', { type: 'button', class: 'btn btn-small' }, 'Stop all');
         const restartAll = h('button', { type: 'button', class: 'btn btn-small' }, 'Restart all');
@@ -238,7 +365,7 @@ export function render(root, ctx) {
       if (containers.body.contains(search.el)) {
         containers.body.querySelector(':scope > .container-list')?.replaceWith(listNode);
       } else {
-        containers.set(search.el, filters.el, h('div', { style: { height: '12px' } }), listNode);
+        containers.set(updatesEl, h('div', { style: { height: '12px' } }), search.el, filters.el, h('div', { style: { height: '12px' } }), listNode);
       }
     }
 
@@ -254,55 +381,89 @@ export function render(root, ctx) {
     async function containerActions(c) {
       const sheet = openContainer(s, c, cname(c), {
         onAction: async (action, button) => {
+          // Updates run in the background with progress at the top of the list.
+          if (action === 'updateContainer') {
+            sheet.close();
+            runUpdates([c]);
+            return;
+          }
           if (await runContainer(c, action, button)) sheet.close();
         },
       });
     }
 
+    let vmList = null;
+
+    // Shutting down or starting takes a while, so check again a few times.
+    function refreshVmsSoon() {
+      for (const ms of [1500, 5000, 12000, 25000]) setTimeout(loadVms, ms);
+    }
+
     async function loadVms() {
-      const domains = await unraid.vms(s);
-      vms.el.hidden = !domains?.length;
-      if (!domains?.length) return;
-      vms.setAside(`${domains.filter((d) => d.state === 'RUNNING').length} of ${domains.length} running`);
+      try {
+        vmList = await unraid.vms(s);
+      } catch (err) {
+        // VM Manager off or no VMs: stay hidden. A key without VM access is the one case
+        // worth showing, since there may be VMs Deckarr can't see.
+        if (!vmList) {
+          const msg = vmErrorMessage(err);
+          vms.el.hidden = !/API key/.test(msg);
+          vms.setAside(null);
+          vms.set(notice(msg, { retry: loadVms }));
+        }
+        return;
+      }
+      vms.el.hidden = !vmList.length;
+      vmList.sort((a, b) => String(a.name).localeCompare(String(b.name), 'en', { sensitivity: 'base' }));
+      const running = vmList.filter(vmRunning);
+      const stopped = vmList.filter((vm) => !vmRunning(vm) && !vmPaused(vm) && vm.state !== 'SHUTDOWN');
+      vms.setAside(vmList.length ? `${running.length} of ${vmList.length} running` : null);
+
+      if (!vmList.length) return;
+
+      const batch = (label, targets, action, verb) => {
+        const btn = h('button', { type: 'button', class: `btn btn-small${action === 'stop' ? ' btn-danger' : ''}` }, label);
+        btn.addEventListener('click', async () => {
+          if (!(await confirmAction({ title: `${verb} ${fmt.count(targets.length, 'VM')}?`, message: targets.map((vm) => vm.name).join(', '), label: verb, destructive: action === 'stop' }))) return;
+          await runAction(btn, async () => {
+            const results = await Promise.allSettled(targets.map((vm) => unraid.vmAction(s, action, vm.id)));
+            const failed = results.filter((r) => r.status === 'rejected');
+            if (failed.length) throw new Error(`${failed.length} of ${targets.length} failed: ${failed[0].reason?.message || ''}`);
+          }, { success: `${verb === 'Start' ? 'Starting' : 'Shutting down'} ${fmt.count(targets.length, 'VM')}` });
+          refreshVmsSoon();
+        });
+        return btn;
+      };
+      const tools = [];
+      if (stopped.length > 1) tools.push(batch(`Start ${stopped.length} stopped`, stopped, 'start', 'Start'));
+      if (running.length > 1) tools.push(batch(`Shut down ${running.length} running`, running, 'stop', 'Shut down'));
+
       vms.set(
         h(
           'div',
           { class: 'list' },
-          domains.map((vm) => {
-            const running = vm.state === 'RUNNING';
-            const paused = vm.state === 'PAUSED' || vm.state === 'PMSUSPENDED';
+          vmList.map((vm) => {
+            const [state, label] = vmState(vm);
+            const quick = vmRunning(vm) ? null : vmPaused(vm) ? ['Resume', 'resume'] : vm.state === 'SHUTDOWN' ? null : ['Start', 'start'];
+            let quickBtn = null;
+            if (quick) {
+              quickBtn = h('button', { type: 'button', class: 'btn btn-small' }, quick[0]);
+              quickBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (await runVmAction(s, vm, quick[1], quickBtn)) refreshVmsSoon();
+              });
+            }
             return h(
-              'button',
-              {
-                type: 'button',
-                class: 'row',
-                onClick: async () => {
-                  const actions = running
-                    ? [
-                        { label: 'Pause', value: 'pause' },
-                        { label: 'Restart', value: 'reboot' },
-                        { label: 'Shut down', value: 'stop', destructive: true },
-                        { label: 'Force stop', value: 'forceStop', destructive: true },
-                      ]
-                    : paused
-                      ? [
-                          { label: 'Resume', value: 'resume' },
-                          { label: 'Force stop', value: 'forceStop', destructive: true },
-                        ]
-                      : [{ label: 'Start', value: 'start' }];
-                  const choice = await actionSheet({ title: vm.name, actions });
-                  if (!choice) return;
-                  if (choice === 'forceStop' && !(await confirmAction({ title: `Force stop ${vm.name}?`, message: 'This is like pulling the power cord. Unsaved work in the VM is lost.', label: 'Force stop' }))) return;
-                  const msg = { start: 'Starting', stop: 'Shutting down', pause: 'Paused', resume: 'Resumed', reboot: 'Restarting', forceStop: 'Force stopped' }[choice];
-                  await runAction(null, () => unraid.vmAction(s, choice, vm.id), { success: `${msg} ${vm.name}` });
-                  setTimeout(loadVms, 1500);
-                },
-              },
-              h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: vm.name }), h('span', { class: 'row-sub', text: fmt.sentence(vm.state) })),
-              light(running ? 'ok' : paused ? 'warn' : vm.state === 'CRASHED' ? 'bad' : ''),
+              'div',
+              { class: 'row has-lead vm-row', role: 'button', tabindex: '0', onClick: () => openVm(s, vm, { onDone: refreshVmsSoon }), onKeydown: (e) => e.key === 'Enter' && openVm(s, vm, { onDone: refreshVmsSoon }) },
+              h('span', { class: 'lead', 'aria-hidden': 'true', text: initials(vm.name) }),
+              h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: vm.name }), h('span', { class: 'row-sub', text: label })),
+              quickBtn,
+              light(state),
             );
           }),
         ),
+        tools.length ? h('div', { class: 'btn-row' }, tools) : null,
       );
     }
 
