@@ -1,0 +1,70 @@
+name: Release
+
+# When the version in package.json on main has no vX.Y.Z tag yet, tag that
+# commit, publish a GitHub release with the matching CHANGELOG.md section, and
+# start the image build for the tag (which publishes :latest and :X.Y.Z).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "v$version already exists, nothing to release."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release notes
+        if: steps.version.outputs.exists == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The CHANGELOG.md section under "## X.Y.Z", up to the next "## ".
+          awk -v v="$VERSION" '
+            $0 ~ "^## " { if (found) exit; if ($2 == v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md 2>/dev/null || true
+          if [ -s notes.md ]; then cat notes.md; else echo "No CHANGELOG.md section for $VERSION, using generated notes."; fi
+
+      - name: Create tag and release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ -s notes.md ]; then
+            gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Deckarr $VERSION" --notes-file notes.md
+          else
+            gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Deckarr $VERSION" --generate-notes
+          fi
+
+      # Tags created with the workflow token don't trigger other workflows,
+      # so start the image build for the new tag explicitly.
+      - name: Build the release image
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh workflow run docker-publish.yml --ref "v$VERSION"
