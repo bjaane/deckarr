@@ -571,7 +571,7 @@ export function vmErrorMessage(err) {
   if (/forbidden|permission|not authori[sz]ed|unauthori[sz]ed|access denied/i.test(msg)) {
     return 'The Unraid API key can’t manage VMs. In Unraid, go to Settings > Management Access > API Keys and give the key read and update access to VMs (or the Admin role).';
   }
-  if (/libvirt|hypervisor|not (running|enabled|started)|disabled|unavailable|connect/i.test(msg)) {
+  if (/libvirt|hypervisor|not (running|enabled|started|available)|disabled|unavailable|connect/i.test(msg)) {
     return 'The VM service isn’t running. Turn it on in Unraid under Settings > VM Manager.';
   }
   if (/Cannot query field/i.test(msg)) return 'This Unraid version doesn’t offer VM control in its API. Update to Unraid 7.2 or newer.';

@@ -32,8 +32,9 @@ export function render(root, ctx) {
     const overview = section(unraids.length > 1 ? s.name : 'Array');
     const manage = section('Manage');
     const containers = section('Containers');
+    // Shown only once Unraid reports at least one VM.
     const vms = section('Virtual machines');
-    vms.set(skeletonList(2));
+    vms.el.hidden = true;
     root.append(overview.el, manage.el, vms.el, containers.el);
 
     let query = '';
@@ -402,24 +403,23 @@ export function render(root, ctx) {
       try {
         vmList = await unraid.vms(s);
       } catch (err) {
+        // VM Manager off or no VMs: stay hidden. A key without VM access is the one case
+        // worth showing, since there may be VMs Deckarr can't see.
         if (!vmList) {
+          const msg = vmErrorMessage(err);
+          vms.el.hidden = !/API key/.test(msg);
           vms.setAside(null);
-          vms.set(notice(vmErrorMessage(err), { retry: loadVms }));
+          vms.set(notice(msg, { retry: loadVms }));
         }
         return;
       }
+      vms.el.hidden = !vmList.length;
       vmList.sort((a, b) => String(a.name).localeCompare(String(b.name), 'en', { sensitivity: 'base' }));
       const running = vmList.filter(vmRunning);
       const stopped = vmList.filter((vm) => !vmRunning(vm) && !vmPaused(vm) && vm.state !== 'SHUTDOWN');
       vms.setAside(vmList.length ? `${running.length} of ${vmList.length} running` : null);
 
-      if (!vmList.length) {
-        vms.set(
-          h('p', { class: 'quiet', text: 'No virtual machines yet. Create them on the VMS tab in Unraid.' }),
-          h('div', { class: 'stack' }, h('a', { class: 'btn', href: `${webBase(s)}/VMs`, target: '_blank', rel: 'noopener' }, 'Open VMs in Unraid')),
-        );
-        return;
-      }
+      if (!vmList.length) return;
 
       const batch = (label, targets, action, verb) => {
         const btn = h('button', { type: 'button', class: `btn btn-small${action === 'stop' ? ' btn-danger' : ''}` }, label);
