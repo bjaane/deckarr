@@ -36,6 +36,11 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # The Apps tab in Unraid reads <Changes> from templates/deckarr.xml on main.
+      - name: Check the Unraid template changelog
+        if: steps.version.outputs.exists == 'false'
+        run: node scripts/sync-template.mjs --check || echo "::warning::templates/deckarr.xml <Changes> doesn't match CHANGELOG.md. Run node scripts/sync-template.mjs before releasing."
+
       - name: Release notes
         if: steps.version.outputs.exists == 'false'
         env:
