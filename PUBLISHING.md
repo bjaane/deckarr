@@ -71,14 +71,12 @@ Optional but appreciated by users: create a support thread in the Unraid forums 
 
 ## 7. Releasing an update
 
-1. Make your changes.
-2. Bump `version` in `package.json` and `CACHE` in `public/sw.js` to the same number.
-3. Add a line under `<Changes>` and update `<Date>` in `templates/deckarr.xml`.
-4. Commit, push, then tag:
+Releases are automatic once the change reaches `main`:
 
-```bash
-git tag v1.2.0
-git push origin main v1.2.0
-```
+1. Make your changes on the `test` branch. Every push there publishes `ghcr.io/bjaane/deckarr:test` for trying it out.
+2. Bump `version` in `package.json` and `CACHE` in `public/sw.js`.
+3. Add a `## X.Y.Z` section at the top of `CHANGELOG.md`.
+4. Run `node scripts/sync-template.mjs`. It copies the newest changelog sections into `<Changes>` in `templates/deckarr.xml` and updates `<Date>`, which is what the Apps tab in Unraid shows.
+5. Merge `test` into `main` with a pull request.
 
-Unraid servers then show **Update ready** for Deckarr on the Docker tab.
+The Release workflow then creates the `vX.Y.Z` tag and GitHub release and builds `:latest`, `:X.Y.Z` and `:X.Y`. Unraid servers show **Update ready** on the Docker tab, and Community Applications picks up the new template text the next time it refreshes its app list (usually within a few hours).

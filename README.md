@@ -121,7 +121,7 @@ Unraid shows **Update ready** on the Docker tab when a new version is published.
 
 ### Publishing a release
 
-Bump `version` in `package.json`, add a section for that version to `CHANGELOG.md`, and merge into `main`. The Release workflow then creates the `vX.Y.Z` tag and the GitHub release, and builds `:latest` and `:X.Y.Z`.
+Bump `version` in `package.json`, add a section for that version to `CHANGELOG.md`, run `node scripts/sync-template.mjs` to copy it into the Unraid template, and merge into `main`. The Release workflow then creates the `vX.Y.Z` tag and the GitHub release, and builds `:latest` and `:X.Y.Z`.
 
 ### Run the test version
 

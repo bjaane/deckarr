@@ -1,6 +1,6 @@
 # Changelog
 
-Releases are published automatically: bump `version` in `package.json`, add a section for it here, and merge into `main`.
+Releases are published automatically: bump `version` in `package.json`, add a section for it here, run `node scripts/sync-template.mjs`, and merge into `main`.
 
 ## 1.4.0
 
@@ -38,3 +38,7 @@ Releases are published automatically: bump `version` in `package.json`, add a se
 
 ### Note
 The Unraid API key needs update access to Docker, VMs, Array and Notifications for the new buttons.
+
+## 1.1.0
+
+- First public release.
