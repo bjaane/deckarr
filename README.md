@@ -108,6 +108,10 @@ Forgot the password? Stop the container, delete `auth.json` in the appdata folde
 
 Unraid shows **Update ready** on the Docker tab when a new version is published. Click it. Your settings are kept.
 
+### Publishing a release
+
+Bump `version` in `package.json`, add a section for that version to `CHANGELOG.md`, and merge into `main`. The Release workflow then creates the `vX.Y.Z` tag and the GitHub release, and builds `:latest` and `:X.Y.Z`.
+
 ### Run the test version
 
 Every push to the `test` branch publishes `ghcr.io/bjaane/deckarr:test`. To use it, open **Docker**, click the Deckarr icon > **Edit**, set **Repository** to `ghcr.io/bjaane/deckarr:test`, and click **Apply**. Unraid then shows **Update ready** whenever a new test build is published. Set it back to `ghcr.io/bjaane/deckarr:latest` to return to releases.
