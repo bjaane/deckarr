@@ -544,7 +544,20 @@ const DISK_FIELDS = 'id idx name device size status temp numErrors fsSize fsUsed
 const CONTAINER_BASE = 'id names image state status autoStart';
 
 export const DOCKER_ACTIONS = ['start', 'stop', 'restart', 'pause', 'unpause', 'updateContainer'];
-export const VM_ACTIONS = ['start', 'stop', 'pause', 'resume', 'reboot', 'forceStop'];
+export const VM_ACTIONS = ['start', 'stop', 'pause', 'resume', 'reboot', 'forceStop', 'reset'];
+
+/** Turns a failed VM query into something a person can act on. */
+export function vmErrorMessage(err) {
+  const msg = String(err?.message || err || '');
+  if (/forbidden|permission|not authori[sz]ed|unauthori[sz]ed|access denied/i.test(msg)) {
+    return 'The Unraid API key can’t manage VMs. In Unraid, go to Settings > Management Access > API Keys and give the key read and update access to VMs (or the Admin role).';
+  }
+  if (/libvirt|hypervisor|not (running|enabled|started)|disabled|unavailable|connect/i.test(msg)) {
+    return 'The VM service isn’t running. Turn it on in Unraid under Settings > VM Manager.';
+  }
+  if (/Cannot query field/i.test(msg)) return 'This Unraid version doesn’t offer VM control in its API. Update to Unraid 7.2 or newer.';
+  return msg;
+}
 
 export const unraid = {
   async overview(s) {
@@ -600,12 +613,8 @@ export const unraid = {
 
   // ----- VMs -----
   async vms(s) {
-    try {
-      const d = await gql(s, '{ vms { domains { id name state } } }');
-      return d.vms?.domains || [];
-    } catch {
-      return null;
-    }
+    const d = await gql(s, '{ vms { domains { id name state } } }');
+    return (d.vms?.domains || []).filter((vm) => vm?.id);
   },
   vmAction(s, action, id) {
     if (!VM_ACTIONS.includes(action)) throw new Error('Unknown action');

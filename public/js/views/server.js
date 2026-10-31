@@ -1,6 +1,6 @@
-import { h, light, bar, fmt, pageHead, section, skeletonList, notice, emptyState, searchField, chips, actionSheet, confirmAction, runAction, initials, toast, chevron } from '../ui.js';
-import { unraid, jellyfin, prowlarr, healthIssues, byType, webBase } from '../services.js';
-import { openDisks, openShares, openParity, openNotifications, openLogs, openContainer } from './unraid.js';
+import { h, light, bar, fmt, pageHead, section, skeletonList, notice, emptyState, searchField, chips, confirmAction, runAction, initials, toast, chevron } from '../ui.js';
+import { unraid, jellyfin, prowlarr, healthIssues, byType, webBase, vmErrorMessage } from '../services.js';
+import { openDisks, openShares, openParity, openNotifications, openLogs, openContainer, openVm, runVmAction, vmState, vmRunning, vmPaused } from './unraid.js';
 
 export function render(root, ctx) {
   const { services } = ctx.state;
@@ -33,8 +33,8 @@ export function render(root, ctx) {
     const manage = section('Manage');
     const containers = section('Containers');
     const vms = section('Virtual machines');
-    vms.el.hidden = true;
-    root.append(overview.el, manage.el, containers.el, vms.el);
+    vms.set(skeletonList(2));
+    root.append(overview.el, manage.el, vms.el, containers.el);
 
     let query = '';
     let filter = 'all';
@@ -259,50 +259,79 @@ export function render(root, ctx) {
       });
     }
 
+    let vmList = null;
+
+    // Shutting down or starting takes a while, so check again a few times.
+    function refreshVmsSoon() {
+      for (const ms of [1500, 5000, 12000, 25000]) setTimeout(loadVms, ms);
+    }
+
     async function loadVms() {
-      const domains = await unraid.vms(s);
-      vms.el.hidden = !domains?.length;
-      if (!domains?.length) return;
-      vms.setAside(`${domains.filter((d) => d.state === 'RUNNING').length} of ${domains.length} running`);
+      try {
+        vmList = await unraid.vms(s);
+      } catch (err) {
+        if (!vmList) {
+          vms.setAside(null);
+          vms.set(notice(vmErrorMessage(err), { retry: loadVms }));
+        }
+        return;
+      }
+      vmList.sort((a, b) => String(a.name).localeCompare(String(b.name), 'en', { sensitivity: 'base' }));
+      const running = vmList.filter(vmRunning);
+      const stopped = vmList.filter((vm) => !vmRunning(vm) && !vmPaused(vm) && vm.state !== 'SHUTDOWN');
+      vms.setAside(vmList.length ? `${running.length} of ${vmList.length} running` : null);
+
+      if (!vmList.length) {
+        vms.set(
+          h('p', { class: 'quiet', text: 'No virtual machines yet. Create them on the VMS tab in Unraid.' }),
+          h('div', { class: 'stack' }, h('a', { class: 'btn', href: `${webBase(s)}/VMs`, target: '_blank', rel: 'noopener' }, 'Open VMs in Unraid')),
+        );
+        return;
+      }
+
+      const batch = (label, targets, action, verb) => {
+        const btn = h('button', { type: 'button', class: `btn btn-small${action === 'stop' ? ' btn-danger' : ''}` }, label);
+        btn.addEventListener('click', async () => {
+          if (!(await confirmAction({ title: `${verb} ${fmt.count(targets.length, 'VM')}?`, message: targets.map((vm) => vm.name).join(', '), label: verb, destructive: action === 'stop' }))) return;
+          await runAction(btn, async () => {
+            const results = await Promise.allSettled(targets.map((vm) => unraid.vmAction(s, action, vm.id)));
+            const failed = results.filter((r) => r.status === 'rejected');
+            if (failed.length) throw new Error(`${failed.length} of ${targets.length} failed: ${failed[0].reason?.message || ''}`);
+          }, { success: `${verb === 'Start' ? 'Starting' : 'Shutting down'} ${fmt.count(targets.length, 'VM')}` });
+          refreshVmsSoon();
+        });
+        return btn;
+      };
+      const tools = [];
+      if (stopped.length > 1) tools.push(batch(`Start ${stopped.length} stopped`, stopped, 'start', 'Start'));
+      if (running.length > 1) tools.push(batch(`Shut down ${running.length} running`, running, 'stop', 'Shut down'));
+
       vms.set(
         h(
           'div',
           { class: 'list' },
-          domains.map((vm) => {
-            const running = vm.state === 'RUNNING';
-            const paused = vm.state === 'PAUSED' || vm.state === 'PMSUSPENDED';
+          vmList.map((vm) => {
+            const [state, label] = vmState(vm);
+            const quick = vmRunning(vm) ? null : vmPaused(vm) ? ['Resume', 'resume'] : vm.state === 'SHUTDOWN' ? null : ['Start', 'start'];
+            let quickBtn = null;
+            if (quick) {
+              quickBtn = h('button', { type: 'button', class: 'btn btn-small' }, quick[0]);
+              quickBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (await runVmAction(s, vm, quick[1], quickBtn)) refreshVmsSoon();
+              });
+            }
             return h(
-              'button',
-              {
-                type: 'button',
-                class: 'row',
-                onClick: async () => {
-                  const actions = running
-                    ? [
-                        { label: 'Pause', value: 'pause' },
-                        { label: 'Restart', value: 'reboot' },
-                        { label: 'Shut down', value: 'stop', destructive: true },
-                        { label: 'Force stop', value: 'forceStop', destructive: true },
-                      ]
-                    : paused
-                      ? [
-                          { label: 'Resume', value: 'resume' },
-                          { label: 'Force stop', value: 'forceStop', destructive: true },
-                        ]
-                      : [{ label: 'Start', value: 'start' }];
-                  const choice = await actionSheet({ title: vm.name, actions });
-                  if (!choice) return;
-                  if (choice === 'forceStop' && !(await confirmAction({ title: `Force stop ${vm.name}?`, message: 'This is like pulling the power cord. Unsaved work in the VM is lost.', label: 'Force stop' }))) return;
-                  const msg = { start: 'Starting', stop: 'Shutting down', pause: 'Paused', resume: 'Resumed', reboot: 'Restarting', forceStop: 'Force stopped' }[choice];
-                  await runAction(null, () => unraid.vmAction(s, choice, vm.id), { success: `${msg} ${vm.name}` });
-                  setTimeout(loadVms, 1500);
-                },
-              },
-              h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: vm.name }), h('span', { class: 'row-sub', text: fmt.sentence(vm.state) })),
-              light(running ? 'ok' : paused ? 'warn' : vm.state === 'CRASHED' ? 'bad' : ''),
+              'div',
+              { class: 'row has-lead vm-row', role: 'button', tabindex: '0', onClick: () => openVm(s, vm, { onDone: refreshVmsSoon }), onKeydown: (e) => e.key === 'Enter' && openVm(s, vm, { onDone: refreshVmsSoon }) },
+              h('span', { class: 'lead', 'aria-hidden': 'true', text: initials(vm.name) }),
+              h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: vm.name }), h('span', { class: 'row-sub', text: label })),
+              quickBtn,
+              light(state),
             );
           }),
         ),
+        tools.length ? h('div', { class: 'btn-row' }, tools) : null,
       );
     }
 

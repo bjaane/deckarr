@@ -1,7 +1,7 @@
-// Unraid detail sheets opened from the Server tab: disks, shares, parity, notifications, logs, containers.
+// Unraid detail sheets opened from the Server tab: disks, shares, parity, notifications, logs, containers, VMs.
 
 import { h, light, bar, fmt, openSheet, skeletonList, notice, chips, actionSheet, confirmAction, runAction, icon } from '../ui.js';
-import { unraid } from '../services.js';
+import { unraid, webBase } from '../services.js';
 
 const cap = (v) => {
   const t = String(v || '').toLowerCase().replace(/_/g, ' ');
@@ -439,5 +439,78 @@ export function openContainer(s, c, name, { onAction } = {}) {
   );
   logOut.append(skeletonList(3));
   loadLogs();
+  return sheet;
+}
+
+// ---------- virtual machines ----------
+
+export const VM_LABEL = {
+  RUNNING: ['ok', 'Running'],
+  IDLE: ['ok', 'Running (idle)'],
+  PAUSED: ['warn', 'Paused'],
+  PMSUSPENDED: ['warn', 'Suspended'],
+  SHUTDOWN: ['', 'Shutting down'],
+  SHUTOFF: ['', 'Stopped'],
+  NOSTATE: ['', 'Stopped'],
+  CRASHED: ['bad', 'Crashed'],
+};
+
+export const vmState = (vm) => VM_LABEL[vm.state] || ['', fmt.sentence(vm.state)];
+export const vmRunning = (vm) => vm.state === 'RUNNING' || vm.state === 'IDLE';
+export const vmPaused = (vm) => vm.state === 'PAUSED' || vm.state === 'PMSUSPENDED';
+
+const VM_DONE = {
+  start: 'Starting',
+  stop: 'Shutting down',
+  pause: 'Paused',
+  resume: 'Resumed',
+  reboot: 'Restarting',
+  forceStop: 'Force stopped',
+  reset: 'Reset',
+};
+
+/** Runs a VM action with the confirmations a destructive one needs. Resolves true when it went through. */
+export async function runVmAction(s, vm, action, button) {
+  if (action === 'forceStop' && !(await confirmAction({ title: `Force stop ${vm.name}?`, message: 'This is like pulling the power cord. Unsaved work in the VM is lost.', label: 'Force stop' }))) return false;
+  if (action === 'reset' && !(await confirmAction({ title: `Hard reset ${vm.name}?`, message: 'This is like pressing the reset button. Unsaved work in the VM is lost.', label: 'Hard reset' }))) return false;
+  if (action === 'stop' && !(await confirmAction({ title: `Shut down ${vm.name}?`, message: 'The VM is asked to shut down cleanly. If it ignores the request, use Force stop.', label: 'Shut down' }))) return false;
+  const res = await runAction(button, () => unraid.vmAction(s, action, vm.id), { success: `${VM_DONE[action]} ${vm.name}` });
+  return res !== undefined;
+}
+
+export function openVm(s, vm, { onDone } = {}) {
+  const sheet = openSheet({ title: vm.name });
+  const [state, label] = vmState(vm);
+  const buttons = [];
+  const add = (text, action, cls = 'btn') => {
+    const b = h('button', { type: 'button', class: cls }, text);
+    b.addEventListener('click', async () => {
+      if (await runVmAction(s, vm, action, b)) {
+        sheet.close();
+        onDone?.(action);
+      }
+    });
+    buttons.push(b);
+  };
+  if (vmRunning(vm)) {
+    add('Shut down', 'stop', 'btn btn-danger');
+    add('Restart', 'reboot');
+    add('Pause', 'pause');
+    add('Force stop', 'forceStop', 'btn btn-danger');
+    add('Hard reset', 'reset', 'btn btn-danger');
+  } else if (vmPaused(vm)) {
+    add('Resume', 'resume', 'btn btn-primary');
+    add('Force stop', 'forceStop', 'btn btn-danger');
+  } else if (vm.state !== 'SHUTDOWN') {
+    add('Start', 'start', 'btn btn-primary');
+  }
+
+  const open = h('a', { class: 'btn', href: `${webBase(s)}/VMs`, target: '_blank', rel: 'noopener' }, 'Open VMs in Unraid');
+  sheet.set(
+    h('div', { class: 'list' }, h('div', { class: 'panel' }, h('div', { class: 'panel-title' }, light(state), label))),
+    buttons.length ? h('div', { class: 'btn-row vm-actions' }, buttons) : h('p', { class: 'hint', text: 'The VM is shutting down. Check back in a moment.' }),
+    h('div', { class: 'stack' }, open),
+    h('p', { class: 'hint', text: 'Shut down asks the VM to power off cleanly. Force stop and Hard reset cut power immediately. Use the Unraid VMs page for the console and settings.' }),
+  );
   return sheet;
 }
