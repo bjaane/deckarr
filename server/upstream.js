@@ -152,7 +152,9 @@ async function callAt(service, baseUrl, { method = 'GET', path = '/', query = ''
       break;
     case 'qbittorrent':
       headers.referer = url.origin;
-      if (service.username) {
+      if (service.apiKey) {
+        headers.authorization = `Bearer ${service.apiKey}`;
+      } else if (service.username) {
         headers.cookie = qbitSessions.get(service.id) || (await qbitLogin(service, baseUrl));
       }
       break;
@@ -163,7 +165,7 @@ async function callAt(service, baseUrl, { method = 'GET', path = '/', query = ''
   const connectTimeout = service.backupUrl ? CONNECT_TIMEOUT_MS : 0;
   const res = await rawRequest(url.href, { method, headers, body, insecure: service.insecure, timeout, connectTimeout });
 
-  if (service.type === 'qbittorrent' && res.status === 403 && service.username && retry) {
+  if (service.type === 'qbittorrent' && res.status === 403 && !service.apiKey && service.username && retry) {
     qbitSessions.delete(service.id);
     return callAt(service, baseUrl, { method, path, query, body, contentType, timeout, retry: false });
   }
@@ -180,7 +182,7 @@ function hostOf(url) {
 
 export function credentialMessage(service) {
   const meta = SERVICE_TYPES[service.type];
-  if (meta?.auth === 'login') {
+  if (meta?.auth === 'login' && !service.apiKey) {
     return service.username
       ? `${service.name} rejected the username or password. Update them in Settings.`
       : `${service.name} needs a username and password. Add them in Settings.`;

@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, icon, light, pageHead, section, notice, openSheet, confirmAction, toast, switchInput, chevron, initials } from '../ui.js';
+import { h, icon, light, pageHead, section, notice, openSheet, confirmAction, toast, switchInput, segmented, chevron, initials } from '../ui.js';
 
 const CATEGORY_ORDER = ['Library', 'Downloads', 'Indexers', 'Subtitles', 'Media server', 'Server'];
 
@@ -166,7 +166,7 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
       spellcheck: 'false',
     });
     const secretAttrs = { autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' };
-    const apiKey = meta.auth === 'apikey'
+    const apiKey = meta.auth === 'apikey' || meta.apiKeyOption
       ? h('input', { type: 'password', placeholder: existing?.hasApiKey ? 'Saved. Leave blank to keep it' : 'Paste the API key', ...secretAttrs })
       : null;
     const username = meta.auth === 'login' ? h('input', { type: 'text', value: existing?.username || '', placeholder: 'admin', ...secretAttrs }) : null;
@@ -175,6 +175,8 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
       : null;
     const backupUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.backupUrl || '', placeholder: `http://tower.tailnet.ts.net:${meta.port}`, ...secretAttrs });
     const webUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.webUrl || '', placeholder: 'Same as the address above', ...secretAttrs });
+    // Services that take either an API key or a sign-in (qBittorrent 5.2+).
+    let authMode = meta.auth === 'apikey' || (meta.apiKeyOption && (existing ? existing.hasApiKey : true)) ? 'apikey' : 'login';
     let insecure = Boolean(existing?.insecure);
     const insecureSwitch = switchInput(insecure, (v) => (insecure = v), 'Allow self-signed certificate');
 
@@ -192,7 +194,8 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
         webUrl: webUrl.value.trim(),
         insecure,
       };
-      if (apiKey && apiKey.value.trim()) p.apiKey = apiKey.value.trim();
+      if (meta.apiKeyOption) p.authMode = authMode;
+      if (apiKey && authMode === 'apikey' && apiKey.value.trim()) p.apiKey = apiKey.value.trim();
       if (username) p.username = username.value.trim();
       if (password && password.value) p.password = password.value;
       return p;
@@ -257,13 +260,41 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
       }
     });
 
-    const credentialFields = meta.auth === 'apikey'
-      ? [field('API key', apiKey)]
-      : [field('Username', username), field('Password', password)];
+    const nameField = field('Name', name);
+    const urlField = field('Address', url);
+    const credentials = h('div', { class: 'list' });
+    const credentialHint = h('p', { class: 'hint' });
+    const drawCredentials = () => {
+      credentials.replaceChildren(
+        nameField,
+        urlField,
+        ...(authMode === 'apikey' ? [field('API key', apiKey)] : [field('Username', username), field('Password', password)]),
+      );
+      credentialHint.textContent = authMode === 'apikey' && meta.apiKeyHelp ? meta.apiKeyHelp : meta.help;
+    };
+    drawCredentials();
+    const authPicker = meta.apiKeyOption
+      ? h(
+          'div',
+          { class: 'auth-mode' },
+          segmented(
+            [
+              { label: 'API key', value: 'apikey' },
+              { label: 'Username & password', value: 'login' },
+            ],
+            authMode,
+            (v) => {
+              authMode = v;
+              drawCredentials();
+            },
+          ),
+        )
+      : null;
 
     const nodes = [
-      h('div', { class: 'list' }, field('Name', name), field('Address', url), credentialFields),
-      h('p', { class: 'hint', text: meta.help }),
+      authPicker,
+      credentials,
+      credentialHint,
       h('p', { class: 'group-label', text: 'Optional' }),
       h(
         'div',

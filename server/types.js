@@ -50,8 +50,10 @@ export const SERVICE_TYPES = {
     category: 'Downloads',
     port: 8080,
     auth: 'login',
+    apiKeyOption: true,
     test: { path: '/api/v2/app/version' },
     help: 'Your qBittorrent Web UI username and password. Leave both blank if qBittorrent skips login for your network.',
+    apiKeyHelp: 'qBittorrent 5.2 or newer: Tools > Options > Web UI > API key.',
   },
   sabnzbd: {
     label: 'SABnzbd',
@@ -87,7 +89,7 @@ export function publicTypes() {
   return Object.fromEntries(
     Object.entries(SERVICE_TYPES).map(([id, t]) => [
       id,
-      { label: t.label, category: t.category, port: t.port, auth: t.auth, help: t.help },
+      { label: t.label, category: t.category, port: t.port, auth: t.auth, apiKeyOption: Boolean(t.apiKeyOption), help: t.help, apiKeyHelp: t.apiKeyHelp },
     ]),
   );
 }

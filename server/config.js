@@ -53,6 +53,12 @@ function normalize(input, existing) {
   if (meta.auth === 'login') {
     service.username = str(pick('username'), 200).trim();
     service.password = input.password !== undefined ? str(input.password, 512) : existing?.password || '';
+    // qBittorrent 5.2+ can use an API key instead of signing in.
+    if (meta.apiKeyOption) {
+      const useKey = input.authMode !== undefined ? input.authMode === 'apikey' : Boolean(existing?.apiKey);
+      service.apiKey = useKey ? (input.apiKey ? str(input.apiKey, 512).trim() : existing?.apiKey || '') : '';
+      if (useKey && !service.apiKey) throw new ValidationError('Enter the API key.');
+    }
   } else {
     service.apiKey = input.apiKey !== undefined && input.apiKey !== '' ? str(input.apiKey, 512).trim() : existing?.apiKey || '';
     if (!service.apiKey) throw new ValidationError('Enter the API key.');

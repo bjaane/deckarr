@@ -1370,3 +1370,7 @@ a.row:active {
     animation: none !important;
   }
 }
+
+.auth-mode .seg {
+  margin: 0 0 14px;
+}
