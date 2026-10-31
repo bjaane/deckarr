@@ -516,8 +516,8 @@ export const prowlarr = {
 
 // ---------- Unraid (GraphQL API, Unraid 7.2+) ----------
 
-async function gql(s, query, variables) {
-  const res = await call(s.id, 'graphql', { method: 'POST', body: { query, variables } });
+async function gql(s, query, variables, { timeout } = {}) {
+  const res = await call(s.id, 'graphql', { method: 'POST', body: { query, variables }, timeout });
   if (res?.errors?.length) {
     const err = new Error(res.errors[0].message);
     err.partial = res.data;
@@ -544,6 +544,25 @@ const DISK_FIELDS = 'id idx name device size status temp numErrors fsSize fsUsed
 const CONTAINER_BASE = 'id names image state status autoStart';
 
 export const DOCKER_ACTIONS = ['start', 'stop', 'restart', 'pause', 'unpause', 'updateContainer'];
+const UPDATE_TIMEOUT = 10 * 60 * 1000;
+const CHECK_TIMEOUT = 5 * 60 * 1000;
+
+/** Explains a failed update or update check, including Unraid versions that can't do it. */
+export function dockerUpdateError(err) {
+  const msg = String(err?.message || err || '');
+  if (/Cannot query field "updateContainer"|Cannot query field "updateContainers"/i.test(msg)) {
+    return 'This Unraid version can check for updates but not apply them through its API (needs Unraid API 4.29 or newer). Update Unraid, or apply the update from the Docker tab in Unraid.';
+  }
+  if (/Cannot query field "refreshDockerDigests"/i.test(msg)) {
+    return 'This Unraid version can’t check for container updates through its API (needs Unraid API 4.21 or newer). Use Check for Updates on the Docker tab in Unraid.';
+  }
+  if (/forbidden|permission|unauthori[sz]ed/i.test(msg)) {
+    return 'The Unraid API key can’t update containers. Give it update access to Docker (or the Admin role) in Settings > Management Access > API Keys.';
+  }
+  if (/took too long/i.test(msg)) return 'Unraid is still working on it. Check the container again in a minute.';
+  return msg;
+}
+
 export const VM_ACTIONS = ['start', 'stop', 'pause', 'resume', 'reboot', 'forceStop', 'reset'];
 
 /** Turns a failed VM query into something a person can act on. */
@@ -601,10 +620,24 @@ export const unraid = {
   },
   dockerAction(s, action, id) {
     if (!DOCKER_ACTIONS.includes(action)) throw new Error('Unknown action');
+    if (action === 'updateContainer') return unraid.updateContainer(s, id);
     return gql(s, `mutation ($id: PrefixedID!) { docker { ${action}(id: $id) { id state status } } }`, { id });
   },
-  updateContainers(s, ids) {
-    return gql(s, 'mutation ($ids: [PrefixedID!]!) { docker { updateContainers(ids: $ids) { id state } } }', { ids });
+  // Pulling a new image can take minutes.
+  async updateContainer(s, id) {
+    try {
+      return await gql(s, 'mutation ($id: PrefixedID!) { docker { updateContainer(id: $id) { id state status } } }', { id }, { timeout: UPDATE_TIMEOUT });
+    } catch (err) {
+      throw new Error(dockerUpdateError(err));
+    }
+  },
+  // Asks Unraid to look up the newest image digests, then the containers list shows what's outdated.
+  async checkUpdates(s) {
+    try {
+      return await gql(s, 'mutation { refreshDockerDigests }', undefined, { timeout: CHECK_TIMEOUT });
+    } catch (err) {
+      throw new Error(dockerUpdateError(err));
+    }
   },
   async containerLogs(s, id, tail = 200) {
     const d = await gql(s, 'query ($id: PrefixedID!, $tail: Int) { docker { logs(id: $id, tail: $tail) { lines { timestamp message } } } }', { id, tail });

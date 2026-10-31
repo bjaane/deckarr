@@ -1402,3 +1402,7 @@ a.row:active {
 .vm-row {
   cursor: pointer;
 }
+
+.updates .notice-body > div:first-child {
+  white-space: pre-line;
+}

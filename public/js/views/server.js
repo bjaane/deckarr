@@ -40,6 +40,13 @@ export function render(root, ctx) {
     let filter = 'all';
     let list = null;
     let last = null;
+    // Container updates: progress of a running batch, the last check time and any failures.
+    const updatesEl = h('div', { class: 'updates' });
+    let updating = null; // { queue: [c], index, current }
+    let checking = false;
+    let checkedAt = null;
+    let updateFailures = [];
+    let cannotApply = null; // set when this Unraid can report updates but not apply them
     const search = searchField('Search containers', (v) => {
       query = v;
       drawContainers();
@@ -158,8 +165,134 @@ export function render(root, ctx) {
       }
     }
 
+    const updatesSupported = () => Boolean(list?.some((c) => 'isUpdateAvailable' in c));
+
+    function drawUpdates() {
+      if (!list) return;
+      const pending = list.filter((c) => c.isUpdateAvailable);
+      const nodes = [];
+      if (!updatesSupported()) {
+        nodes.push(
+          h(
+            'div',
+            { class: 'list' },
+            h(
+              'div',
+              { class: 'row' },
+              light(''),
+              h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: 'Update checks aren’t available' }), h('span', { class: 'row-sub wrap', text: 'This Unraid version doesn’t report container updates through its API. Use the Docker tab in Unraid.' })),
+            ),
+          ),
+        );
+      } else if (updating) {
+        const { queue, index, current } = updating;
+        nodes.push(
+          h(
+            'div',
+            { class: 'list' },
+            h(
+              'div',
+              { class: 'panel' },
+              h('div', { class: 'panel-title' }, light('active'), `Updating ${current} (${index + 1} of ${queue.length})`),
+              bar(index / queue.length),
+              h('div', { class: 'panel-sub', text: 'Pulling the new image and restarting the container. Keep this page open.' }),
+            ),
+          ),
+        );
+      } else {
+        const check = h('button', { type: 'button', class: 'btn btn-small' }, checking ? 'Checking…' : 'Check now');
+        check.disabled = checking;
+        check.addEventListener('click', checkUpdates);
+        const buttons = [check];
+        if (pending.length && cannotApply) {
+          buttons.push(h('a', { class: 'btn btn-small btn-primary', href: `${webBase(s)}/Docker`, target: '_blank', rel: 'noopener' }, 'Update in Unraid'));
+        } else if (pending.length) {
+          const all = h('button', { type: 'button', class: 'btn btn-small btn-primary' }, pending.length === 1 ? 'Update' : `Update all ${pending.length}`);
+          all.addEventListener('click', async () => {
+            const ok = await confirmAction({
+              title: pending.length === 1 ? `Update ${cname(pending[0])}?` : `Update ${pending.length} containers?`,
+              message: `${pending.map(cname).join(', ')}. Each one pulls its new image and restarts.`,
+              label: 'Update',
+              destructive: false,
+            });
+            if (ok) runUpdates(pending);
+          });
+          buttons.push(all);
+        }
+        const title = pending.length ? `${fmt.count(pending.length, 'update')} available` : 'All containers are up to date';
+        const sub = checking ? 'Asking the registries for new images…' : checkedAt ? `Checked at ${fmt.time(checkedAt)}` : 'Unraid checks for updates on its own schedule. Tap Check now to check right away.';
+        nodes.push(
+          h(
+            'div',
+            { class: 'list' },
+            h('div', { class: 'row' }, light(pending.length ? 'warn' : 'ok'), h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: title }), h('span', { class: 'row-sub wrap', text: sub }))),
+          ),
+          h('div', { class: 'btn-row' }, buttons),
+        );
+        if (cannotApply) {
+          nodes.push(h('div', { style: { marginTop: '12px' } }, notice(cannotApply, { kind: 'warn' })));
+        } else if (updateFailures.length) {
+          nodes.push(
+            h('div', { style: { marginTop: '12px' } }, notice(updateFailures.map((f) => `${f.name}: ${f.error}`).join('\n'), { kind: 'warn' })),
+          );
+        }
+      }
+      updatesEl.replaceChildren(...nodes);
+    }
+
+    async function checkUpdates() {
+      if (checking || updating) return;
+      checking = true;
+      drawUpdates();
+      try {
+        await unraid.checkUpdates(s);
+        checkedAt = new Date();
+        await loadContainers();
+        const n = list?.filter((c) => c.isUpdateAvailable).length || 0;
+        toast(n ? `${fmt.count(n, 'update')} available` : 'All containers are up to date');
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally {
+        checking = false;
+        drawUpdates();
+      }
+    }
+
+    // One container at a time, so progress is visible and one failure doesn't stop the rest.
+    async function runUpdates(targets) {
+      if (updating) return;
+      updateFailures = [];
+      updating = { queue: targets, index: 0, current: cname(targets[0]) };
+      drawContainers();
+      let done = 0;
+      for (let i = 0; i < targets.length; i += 1) {
+        updating = { queue: targets, index: i, current: cname(targets[i]) };
+        drawContainers();
+        try {
+          await unraid.updateContainer(s, targets[i].id);
+          done += 1;
+        } catch (err) {
+          updateFailures.push({ name: cname(targets[i]), error: err.message });
+          // An API that can't update at all will fail the same way for every container.
+          if (/needs Unraid API/.test(err.message)) {
+            cannotApply = err.message;
+            updateFailures = [];
+            break;
+          }
+        }
+      }
+      updating = null;
+      await loadContainers();
+      drawContainers();
+      if (cannotApply && !done) toast('Unraid can’t apply updates through its API', 'bad');
+      else if (!updateFailures.length) toast(done === 1 ? `Updated ${cname(targets[0])}` : `Updated ${done} containers`);
+      else toast(done ? `Updated ${done}, ${updateFailures.length} failed` : 'Update failed', 'bad');
+      return !updateFailures.length;
+    }
+
     function drawContainers() {
       if (!list) return;
+      drawUpdates();
       const running = list.filter((c) => c.state === 'RUNNING');
       const stopped = list.filter((c) => c.state !== 'RUNNING');
       const updates = list.filter((c) => c.isUpdateAvailable);
@@ -179,25 +312,18 @@ export function render(root, ctx) {
       const rows = shown.map((c) => {
         const name = cname(c);
         const state = c.state === 'RUNNING' ? 'ok' : c.state === 'PAUSED' ? 'warn' : '';
+        const busy = updating?.queue[updating.index]?.id === c.id;
         return h(
           'button',
           { type: 'button', class: 'row has-lead', onClick: () => containerActions(c) },
           containerIcon(s, c),
-          h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: name }), h('span', { class: 'row-sub', text: [c.status || c.state, c.isUpdateAvailable ? 'Update available' : null].filter(Boolean).join(' · ') })),
-          light(state),
+          h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: name }), h('span', { class: 'row-sub', text: busy ? 'Updating…' : c.status || c.state })),
+          c.isUpdateAvailable && !busy ? h('span', { class: 'tag warn', text: 'Update' }) : null,
+          light(busy ? 'active' : state),
         );
       });
 
       const tools = [];
-      if (filter === 'updates' && updates.length) {
-        const all = h('button', { type: 'button', class: 'btn btn-small btn-primary' }, `Update ${fmt.count(updates.length, 'container')}`);
-        all.addEventListener('click', async () => {
-          if (!(await confirmAction({ title: `Update ${fmt.count(updates.length, 'container')}?`, message: 'Each container is pulled again and restarted.', label: 'Update', destructive: false }))) return;
-          await runAction(all, () => unraid.updateContainers(s, updates.map((c) => c.id)), { success: 'Updates finished' });
-          loadContainers();
-        });
-        tools.push(h('div', { class: 'btn-row' }, all));
-      }
       if (running.length) {
         const stopAll = h('button', { type: 'button', class: 'btn btn-small' }, 'Stop all');
         const restartAll = h('button', { type: 'button', class: 'btn btn-small' }, 'Restart all');
@@ -238,7 +364,7 @@ export function render(root, ctx) {
       if (containers.body.contains(search.el)) {
         containers.body.querySelector(':scope > .container-list')?.replaceWith(listNode);
       } else {
-        containers.set(search.el, filters.el, h('div', { style: { height: '12px' } }), listNode);
+        containers.set(updatesEl, h('div', { style: { height: '12px' } }), search.el, filters.el, h('div', { style: { height: '12px' } }), listNode);
       }
     }
 
@@ -254,6 +380,12 @@ export function render(root, ctx) {
     async function containerActions(c) {
       const sheet = openContainer(s, c, cname(c), {
         onAction: async (action, button) => {
+          // Updates run in the background with progress at the top of the list.
+          if (action === 'updateContainer') {
+            sheet.close();
+            runUpdates([c]);
+            return;
+          }
           if (await runContainer(c, action, button)) sheet.close();
         },
       });

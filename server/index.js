@@ -182,6 +182,9 @@ async function proxy(req, res, serviceId, subpath, url) {
   if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method)) throw new HttpError(405, 'Method not allowed.');
 
   const body = req.method === 'GET' ? null : await readBody(req, 5_000_000);
+  // The app asks for more time on slow actions such as container updates (at most 15 minutes).
+  const seconds = Number(req.headers['x-deckarr-timeout']);
+  const timeout = Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 900) * 1000 : undefined;
   let upstream;
   try {
     upstream = await callService(service, {
@@ -190,6 +193,7 @@ async function proxy(req, res, serviceId, subpath, url) {
       query: url.search.slice(1),
       body: body && body.length ? body : null,
       contentType: req.headers['content-type'] || null,
+      timeout,
     });
   } catch (err) {
     throw new HttpError(502, describeError(err, service));
