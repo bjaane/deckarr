@@ -13,7 +13,7 @@ A free, self-hosted iPhone web app for your media server. It runs as one small c
 | Home | Service status, the next 7 days of episodes, movies and albums, active downloads, and what's playing on Jellyfin |
 | Library | Browse Sonarr, Radarr and Lidarr. Search for releases, monitor titles or seasons, remove titles, add new series, movies and artists |
 | Activity | The *arr queue, qBittorrent (pause, resume, delete) and SABnzbd |
-| Server | Unraid array, CPU and RAM, start, stop and restart containers and VMs, Jellyfin library scan, Prowlarr indexer status, health warnings |
+| Server | Unraid array, CPU, RAM, CPU temperature and power, network traffic, UPS. Disks with temperatures and errors, shares, parity checks (start, pause, cancel, history), Unraid notifications (archive, delete), system logs. Containers: start, stop, restart, pause, update (one or all), details, ports and logs, filters and batch actions. VMs: start, shut down, pause, resume, restart, force stop. Jellyfin library scan, Prowlarr indexer status, health warnings |
 | Settings | Add services, test connections, change the password |
 
 Supported services: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid 7.2+.
@@ -70,9 +70,9 @@ The container fixes the permissions of `/config` itself and then runs as `PUID`/
 | Sonarr, Radarr, Lidarr, Prowlarr | Settings > General > Security > API Key |
 | Bazarr | Settings > General > Security > API Key |
 | SABnzbd | Config > General > Security > API Key (not the NZB key) |
-| qBittorrent | Web UI username and password. Leave both blank if qBittorrent skips login for your subnet |
+| qBittorrent | qBittorrent 5.2+: an API key from Tools > Options > Web UI. Older versions: Web UI username and password, or leave both blank if qBittorrent skips login for your subnet |
 | Jellyfin | Dashboard > API Keys > New API key |
-| Unraid 7.2+ | Settings > Management Access > API Keys. Use the Admin role, or read and update access to Docker, VMs and Array |
+| Unraid 7.2+ | Settings > Management Access > API Keys. Use the Admin role, or read access to everything plus update access to Docker, VMs, Array and Notifications (needed for container, VM, parity and notification actions) |
 
 ---
 

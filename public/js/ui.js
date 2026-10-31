@@ -465,6 +465,11 @@ export const fmt = {
   count(n, singular, plural = `${singular}s`) {
     return `${n} ${n === 1 ? singular : plural}`;
   },
+  // "PARITY_CHECK" -> "Parity check"
+  sentence(value) {
+    const t = String(value || '').toLowerCase().replace(/_/g, ' ');
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  },
   since(date) {
     const t = new Date(date).getTime();
     if (!Number.isFinite(t)) return '';
