@@ -1,6 +1,6 @@
 # Deckarr
 
-A free, self-hosted iPhone web app for your media server. It runs as one small container on Unraid and you add it to your Home Screen like a normal app.
+A free, self-hosted web app for your media server, made for phones and tablets: iPhone and iPad, Android (including GrapheneOS), and any modern browser. It runs as one small container on Unraid and you add it to your home screen like a normal app.
 
 <p>
   <img src="docs/home.png" width="250" alt="Home: what's coming up and downloading">
@@ -18,7 +18,7 @@ A free, self-hosted iPhone web app for your media server. It runs as one small c
 
 Supported services: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid 7.2+.
 
-API keys are stored only on the server (`/config/config.json`, mode 600). The phone never sees them; it talks to Deckarr, and Deckarr talks to your services.
+API keys are stored only on the server (`/config/config.json`, mode 600). Your phone never sees them; it talks to Deckarr, and Deckarr talks to your services.
 
 ---
 
@@ -28,7 +28,7 @@ API keys are stored only on the server (`/config/config.json`, mode 600). The ph
 
 1. Open **Apps** in Unraid and search for **Deckarr**.
 2. Click **Install**, then **Apply**. The defaults work for most servers.
-3. Continue with [First run on the iPhone](#first-run-on-the-iphone).
+3. Continue with [First run on your phone](#first-run-on-your-phone).
 
 ### Before Deckarr is listed in Apps
 
@@ -52,12 +52,23 @@ docker run -d --name deckarr --restart unless-stopped \
 
 The container fixes the permissions of `/config` itself and then runs as `PUID`/`PGID` (default `99`/`100`, Unraid's `nobody:users`).
 
-### First run on the iPhone
+### First run on your phone
 
-1. Open Safari and go to `http://<your-unraid-ip>:8484`.
+1. Open your browser and go to `http://<your-unraid-ip>:8484`.
 2. Create a password. You type it once per device.
 3. Go to **Settings > Add a service** and add your apps. Use **Test connection** before saving.
-4. Tap **Share > Add to Home Screen**. Deckarr now opens full screen from its own icon.
+4. Add Deckarr to your home screen so it opens full screen from its own icon:
+
+| Device | How |
+| --- | --- |
+| iPhone and iPad (Safari) | Tap **Share**, then **Add to Home Screen** |
+| Android: Chrome, Vanadium (GrapheneOS), Samsung Internet, Edge, Brave | Tap **Install Deckarr** in Deckarr's Settings when it appears, or open the browser menu (⋮) and tap **Install app** or **Add to Home screen** |
+| Android: Firefox | Open the menu (⋮) and tap **Add to Home screen** |
+| Computer (Chrome, Edge) | Click the install icon in the address bar, or use **Install Deckarr** in Settings |
+
+On Android, a full-screen app needs `https://`. Over plain `http://` the icon is a shortcut that opens in the browser. Everything still works, it just shows the browser bar. See [Access away from home](#access-away-from-home) for easy ways to get HTTPS.
+
+The Android back button closes open panels before it leaves a page.
 
 > **Use your Unraid LAN IP for service addresses**, for example `http://192.168.1.10:8989`. `localhost` inside the Deckarr container points at Deckarr itself.
 
@@ -80,10 +91,10 @@ The container fixes the permissions of `/config` itself and then runs as `PUID`/
 
 Don't forward port 8484 to the internet. Use one of these instead:
 
-- **Tailscale (recommended, free):** install Tailscale on Unraid (built in from Unraid 7) and on the iPhone, then open `http://<unraid-tailscale-ip>:8484`.
+- **Tailscale (recommended, free):** install Tailscale on Unraid (built in from Unraid 7) and on your phone, then open `http://<unraid-tailscale-ip>:8484`. With **Tailscale Serve** you also get an `https://` address, which lets Android install Deckarr as a full-screen app.
 - **Reverse proxy with HTTPS** (Nginx Proxy Manager, SWAG, Caddy): point it at port 8484. Sub-paths such as `https://example.com/deckarr/` work. Pass `X-Forwarded-Proto` so the session cookie is marked secure.
 
-Add the Home Screen icon from the address you'll use most, because the icon remembers that address.
+Add the home screen icon from the address you'll use most, because the icon remembers that address.
 
 ### Backup address for a service
 

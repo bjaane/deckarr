@@ -1,12 +1,11 @@
 {
   "name": "Deckarr",
   "short_name": "Deckarr",
-  "description": "Control Sonarr, Radarr, qBittorrent, Jellyfin and Unraid from your phone.",
+  "description": "Control Sonarr, Radarr, qBittorrent, Jellyfin and Unraid from your phone or tablet.",
   "id": "./",
   "start_url": "./#/home",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#0d1520",
   "theme_color": "#0d1520",
   "icons": [

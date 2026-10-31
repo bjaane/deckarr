@@ -2,6 +2,18 @@
 
 Releases are published automatically: bump `version` in `package.json`, add a section for it here, and merge into `main`.
 
+## 1.4.0
+
+### New
+- **Works on Android, GrapheneOS and other platforms, not just iPhone.** Settings shows how to add Deckarr to the home screen on your device. Chromium-based browsers (Chrome, Vanadium on GrapheneOS, Samsung Internet, Edge, Brave) get an **Install Deckarr** button.
+- **Back button closes panels.** On Android, and with the browser's back gesture, Back closes the open panel instead of leaving the page.
+
+### Improved
+- The app is no longer locked to portrait, so tablets and foldables can use landscape.
+- On Android, the on-screen keyboard no longer covers text fields in panels.
+- On Android over plain `http://`, Settings explains that a full-screen app needs `https://` (for example Tailscale Serve).
+- The README, Unraid template and app description now cover iPhone, iPad, Android and other browsers.
+
 ## 1.3.0
 
 ### New

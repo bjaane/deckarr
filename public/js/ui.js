@@ -243,6 +243,34 @@ export function switchInput(checked, onChange, label) {
 
 // ---------- sheets ----------
 
+// Open sheets, newest last. The back button (Android, browsers) closes the newest one.
+const openSheets = [];
+const SHEET_STATE = 'deckarr-sheet';
+
+// history.back() calls we made ourselves, so their popstate doesn't close the next sheet down.
+let ownBacks = 0;
+let ownBackTimer;
+function dropSheetEntry() {
+  ownBacks += 1;
+  clearTimeout(ownBackTimer);
+  ownBackTimer = setTimeout(() => (ownBacks = 0), 600);
+  history.back();
+}
+
+window.addEventListener('popstate', (e) => {
+  if (ownBacks > 0) {
+    ownBacks -= 1;
+    return;
+  }
+  const top = openSheets[openSheets.length - 1];
+  if (top) {
+    top.close({ fromHistory: true });
+  } else if (e.state === SHEET_STATE) {
+    // A sheet closed with its own button left this entry behind; skip it.
+    dropSheetEntry();
+  }
+});
+
 let lockCount = 0;
 const lock = () => {
   lockCount += 1;
@@ -264,9 +292,13 @@ export function openSheet({ title = '', tall = false, onClose } = {}) {
   let closed = false;
   const previousFocus = document.activeElement;
 
-  function close() {
+  function close({ fromHistory = false } = {}) {
     if (closed) return;
     closed = true;
+    const i = openSheets.indexOf(api);
+    if (i !== -1) openSheets.splice(i, 1);
+    // Closed with a button: drop the history entry the sheet added, so Back isn't needed twice.
+    if (!fromHistory && history.state === SHEET_STATE) dropSheetEntry();
     panel.classList.remove('open');
     scrim.classList.remove('open');
     document.removeEventListener('keydown', onKey);
@@ -309,13 +341,14 @@ export function openSheet({ title = '', tall = false, onClose } = {}) {
 
   document.body.append(scrim, panel);
   lock();
+  history.pushState(SHEET_STATE, '');
   requestAnimationFrame(() => {
     scrim.classList.add('open');
     panel.classList.add('open');
     closeBtn.focus({ preventScroll: true });
   });
 
-  return {
+  const api = {
     el: panel,
     body,
     close,
@@ -329,9 +362,11 @@ export function openSheet({ title = '', tall = false, onClose } = {}) {
       body.scrollTop = 0;
     },
   };
+  openSheets.push(api);
+  return api;
 }
 
-/** iOS-style action sheet. Resolves with the chosen action's value, or null. */
+/** Bottom action sheet. Resolves with the chosen action's value, or null. */
 export function actionSheet({ title, message, actions }) {
   return new Promise((resolve) => {
     let chosen = null;

@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { canPrompt, promptInstall, onInstallChange, isInstalled, installSteps, needsHttpsForApp } from '../install.js';
 import { h, icon, light, pageHead, section, notice, openSheet, confirmAction, toast, switchInput, segmented, chevron, initials } from '../ui.js';
 
 const CATEGORY_ORDER = ['Library', 'Downloads', 'Indexers', 'Subtitles', 'Media server', 'Server'];
@@ -81,18 +82,29 @@ export function render(root, ctx, params) {
   );
   account.set(h('div', { class: 'list' }, accountRows), state.auth.passwordFromEnv ? h('p', { class: 'section-note', text: 'The password is set with APP_PASSWORD on the container.' }) : null);
 
-  // ---- install hint ----
-  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-  if (!standalone) {
+  // ---- install ----
+  if (!isInstalled()) {
     const install = section('Use it like an app');
     root.append(install.el);
-    install.set(
-      h(
-        'div',
-        { class: 'list' },
-        h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('span', { class: 'row-sub wrap', text: 'In Safari, tap the Share button, then Add to Home Screen. Deckarr then opens full screen from its own icon.' }))),
-      ),
-    );
+    const draw = () => {
+      const rows = [];
+      if (canPrompt()) {
+        const btn = h('button', { type: 'button', class: 'btn btn-primary btn-block' }, 'Install Deckarr');
+        btn.addEventListener('click', async () => {
+          if (await promptInstall()) toast('Deckarr is installed');
+        });
+        rows.push(h('div', { class: 'stack' }, btn));
+      }
+      rows.push(
+        h('div', { class: 'list' }, h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('span', { class: 'row-sub wrap', text: `${installSteps()} Deckarr then opens full screen from its own icon.` })))),
+      );
+      if (needsHttpsForApp()) {
+        rows.push(h('p', { class: 'section-note', text: 'Over plain http://, Android adds a shortcut that opens in the browser. For a full-screen app, open Deckarr over https://, for example with Tailscale Serve or a reverse proxy.' }));
+      }
+      install.set(...rows);
+    };
+    draw();
+    ctx.onDispose(onInstallChange(draw));
   }
 
   const about = section('About');
