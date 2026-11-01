@@ -2,7 +2,7 @@ import { h, light, bar, fmt, pageHead, section, skeletonList, notice, emptyState
 import { unraid, jellyfin, prowlarr, healthIssues, byType, webBase, vmErrorMessage } from '../services.js';
 import { openDisks, openShares, openParity, openNotifications, openLogs, openContainer, openVm, runVmAction, vmState, vmRunning, vmPaused } from './unraid.js';
 
-export function render(root, ctx) {
+export function render(root, ctx, params) {
   const { services } = ctx.state;
   const unraids = byType(services, 'unraid');
   const jellyfins = byType(services, 'jellyfin');
@@ -505,6 +505,12 @@ export function render(root, ctx) {
         ),
         tools.length ? h('div', { class: 'btn-row' }, tools) : null,
       );
+    }
+
+    // Opened from a push notification: show that server's notifications.
+    if (params?.get('notifications') === s.id) {
+      history.replaceState(history.state, '', '#/server');
+      openNotifications(s, { onChange: loadOverview });
     }
 
     drawManage(null);

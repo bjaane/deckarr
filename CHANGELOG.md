@@ -2,6 +2,11 @@
 
 Releases are published automatically: bump `version` in `package.json`, add a section for it here, run `node scripts/sync-template.mjs`, and merge into `main`.
 
+## 1.5.0
+
+### New
+- **Push notifications for Unraid alerts.** Turn them on per device in Settings > Notifications and choose Alerts, Warnings or Everything. The Deckarr server checks Unraid every minute and sends new notifications straight to your phone's push service, even when Deckarr is closed. Tapping one opens Unraid's notification list. Works on iPhone and iPad (iOS 16.4+, added to the Home Screen), Android and desktop browsers. Needs Deckarr to be opened over https://, for example through Tailscale Serve.
+
 ## 1.4.1
 
 ### Fixed

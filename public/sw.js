@@ -1,5 +1,5 @@
 // Keeps the app shell available offline. API calls always go to the network.
-const CACHE = 'deckarr-v1.4.1';
+const CACHE = 'deckarr-v1.5.0';
 const SHELL = [
   './',
   'index.html',
@@ -9,6 +9,7 @@ const SHELL = [
   'js/api.js',
   'js/ui.js',
   'js/install.js',
+  'js/notifications.js',
   'js/services.js',
   'js/views/home.js',
   'js/views/library.js',
@@ -50,5 +51,42 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => caches.match(request).then((hit) => hit || caches.match('index.html'))),
+  );
+});
+
+// ---------- push notifications (Unraid alerts) ----------
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  const title = data.server ? `${data.server}: ${data.title || 'Unraid'}` : data.title || 'Deckarr';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      tag: data.tag,
+      icon: 'icons/icon-192.png',
+      data: { url: data.url || './' },
+    }),
+  );
+});
+
+// Tapping a notification opens Deckarr on the right page, reusing an open window when there is one.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || './', self.registration.scope).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const open = windows.find((w) => w.url.startsWith(self.registration.scope));
+      if (open) {
+        await open.focus();
+        return open.navigate(url).catch(() => open);
+      }
+      return self.clients.openWindow(url);
+    })(),
   );
 });

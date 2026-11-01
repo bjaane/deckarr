@@ -9,6 +9,7 @@ import { Auth } from './auth.js';
 import { ConfigStore, ValidationError } from './config.js';
 import { callService, testService, clearSession, describeError, credentialMessage } from './upstream.js';
 import { publicTypes } from './types.js';
+import { PushStore, LEVELS, sendPush, startWatching } from './push.js';
 
 const gzip = promisify(zlib.gzip);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,6 +24,8 @@ const auth = new Auth(path.join(CONFIG_DIR, 'auth.json'), process.env.APP_PASSWO
 await auth.load();
 const store = new ConfigStore(path.join(CONFIG_DIR, 'config.json'));
 await store.load();
+const pushStore = new PushStore(path.join(CONFIG_DIR, 'push.json'));
+await pushStore.load();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -291,6 +294,43 @@ async function handleApi(req, res, url) {
     return sendJson(req, res, 200, store.publicList());
   }
 
+  // ---------- push notifications ----------
+
+  if (p === '/api/push/key' && m === 'GET') return sendJson(req, res, 200, { publicKey: pushStore.publicKey });
+
+  if (p === '/api/push/find' && m === 'POST') {
+    const sub = pushStore.find((await readJson(req)).endpoint);
+    return sendJson(req, res, 200, sub ? { level: sub.level } : null);
+  }
+
+  if (p === '/api/push/subscribe' && m === 'POST') {
+    const { subscription, level, name } = await readJson(req);
+    if (level && !(level in LEVELS)) throw new HttpError(400, 'Choose which alerts to get.');
+    try {
+      const sub = await pushStore.upsert(subscription || {}, level, name);
+      return sendJson(req, res, 200, { level: sub.level });
+    } catch (err) {
+      throw new HttpError(err.status || 500, err.message);
+    }
+  }
+
+  if (p === '/api/push/unsubscribe' && m === 'POST') {
+    await pushStore.remove((await readJson(req)).endpoint);
+    return sendJson(req, res, 200, { ok: true });
+  }
+
+  if (p === '/api/push/test' && m === 'POST') {
+    const sub = pushStore.find((await readJson(req)).endpoint);
+    if (!sub) throw new HttpError(404, 'Notifications are off on this device.');
+    const result = await sendPush(sub, { title: 'Deckarr', body: 'Notifications work. Unraid alerts will show up like this.', tag: 'deckarr-test', url: './#/settings' }, pushStore.data.vapid);
+    if (result === 'gone') {
+      await pushStore.remove(sub.endpoint);
+      throw new HttpError(410, 'This device’s notification subscription expired. Turn notifications off and on again.');
+    }
+    if (result !== 'ok') throw new HttpError(502, 'The push service didn’t accept the message. Check the container log.');
+    return sendJson(req, res, 200, { ok: true });
+  }
+
   if (p === '/api/status' && m === 'GET') {
     return sendJson(req, res, 200, await allStatus(url.searchParams.has('fresh')));
   }
@@ -376,6 +416,8 @@ const server = http.createServer(async (req, res) => {
     else await send(req, res, status, message, { 'Content-Type': 'text/plain; charset=utf-8' });
   }
 });
+
+startWatching(pushStore, store);
 
 server.listen(PORT, () => {
   console.log(`Deckarr ${VERSION} listening on port ${PORT}`);

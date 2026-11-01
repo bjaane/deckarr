@@ -98,6 +98,24 @@ Don't forward port 8484 to the internet. Use one of these instead:
 
 Add the home screen icon from the address you'll use most, because the icon remembers that address.
 
+---
+
+## Push notifications for Unraid alerts
+
+Deckarr can send Unraid's notifications to your phone, even when Deckarr is closed. Turn it on per device in **Settings > Notifications** and choose **Alerts**, **Warnings** (alerts and warnings) or **Everything**. **Send a test notification** checks the whole path.
+
+The Deckarr server checks Unraid for new notifications every minute. It sends each new one straight to your device's push service (Apple, Google or Mozilla), encrypted for that device. No account, app store or relay server is involved. Tapping a notification opens Unraid's notification list in Deckarr.
+
+What you need:
+
+- **HTTPS.** Browsers only allow notifications on `https://` addresses. Open Deckarr through Tailscale Serve or a reverse proxy (see above) and turn notifications on from that address.
+- **iPhone and iPad:** iOS 16.4 or newer, with Deckarr added to the Home Screen and opened from its icon.
+- **Android:** Chrome, Vanadium, Samsung Internet and Edge deliver notifications through Google Play services. On **GrapheneOS**, install sandboxed Google Play, or use **Firefox**, which has its own push service.
+- **The Unraid API key** needs read access to notifications. The Admin role or the permissions listed above already include it.
+- **The Deckarr container** needs internet access to reach the push services.
+
+Which events Unraid reports, such as disk temperatures, parity check results or array errors, is set in Unraid under **Settings > Notification Settings**.
+
 ### Backup address for a service
 
 If Deckarr itself runs somewhere that isn't always on the same network as a service (for example on another machine, or a service on a second server), add a **Backup address** under *Optional* when you edit the service, such as a Tailscale name or IP (`http://tower.tailnet.ts.net:8989`). Deckarr tries the main address first and switches to the backup when the main one can't be reached. After a switch it keeps using the backup for 5 minutes before trying the main address again. The same API key or login is used for both.
@@ -131,7 +149,7 @@ Every push to the `test` branch publishes `ghcr.io/bjaane/deckarr:test`. To use 
 
 ## Back up
 
-Back up `/mnt/user/appdata/deckarr`. It contains your API keys, so treat it like a password file.
+Back up `/mnt/user/appdata/deckarr`. It contains your API keys and the key that signs push notifications (`push.json`), so treat it like a password file. If `push.json` is lost, turn notifications off and on again on each device.
 
 ---
 
@@ -157,6 +175,8 @@ If Sonarr and Jellyfin see the media at different paths (`/tv` vs `/data/tv`), f
 | *… uses a certificate Deckarr doesn't trust* | Turn on **Allow self-signed certificate** for that service |
 | *Unraid: Cannot query field …* | Update Unraid. The API needs Unraid 7.2 or newer |
 | *qBittorrent has temporarily blocked this server* | Too many failed logins. Wait, then fix the username and password |
+| *Notifications need Deckarr to be opened over https://* | Open Deckarr through Tailscale Serve or a reverse proxy with HTTPS. See [Push notifications](#push-notifications-for-unraid-alerts) |
+| *The browser couldn't set up notifications* (Android) | Chromium browsers need Google Play services for notifications. On GrapheneOS, install sandboxed Google Play, or use Firefox |
 
 The container log in the Docker tab shows server-side errors.
 
@@ -168,6 +188,7 @@ The container log in the Docker tab shows server-side errors.
 server/         Node.js server, no dependencies
   index.js      routes, sign-in, static files
   upstream.js   talks to each service, injects credentials
+  push.js       Unraid push notifications (Web Push, no dependencies)
   types.js      list of supported services
 public/         the app (plain JavaScript, no build step)
   js/services.js  one adapter per service
