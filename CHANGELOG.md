@@ -2,6 +2,12 @@
 
 Releases are published automatically: bump `version` in `package.json`, add a section for it here, run `node scripts/sync-template.mjs`, and merge into `main`.
 
+## 1.4.1
+
+### Fixed
+- **Container updates no longer report "Request failed (HTTP 504)".** Pulling a new image can take more than a minute, and Unraid's web server stops waiting while the update keeps running. Deckarr now treats this as "still updating", keeps checking until the container runs the new image (up to 10 minutes), and then reports it as updated. Check now handles a slow update check the same way.
+- The README and the Apps tab use real screenshots of every tab.
+
 ## 1.4.0
 
 ### New

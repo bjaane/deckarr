@@ -547,6 +547,16 @@ export const DOCKER_ACTIONS = ['start', 'stop', 'restart', 'pause', 'unpause', '
 const UPDATE_TIMEOUT = 10 * 60 * 1000;
 const CHECK_TIMEOUT = 5 * 60 * 1000;
 
+// Unraid's web server gives up on long requests (HTTP 504) while the work carries on, and
+// Deckarr's own proxy can time out the same way. Such an update or check is still running.
+const gaveUpWaiting = (err) => [502, 503, 504].includes(err?.status) || /took too long|closed the connection/i.test(String(err?.message || ''));
+
+function stillRunning() {
+  const err = new Error('Unraid is still working on it.');
+  err.stillRunning = true;
+  return err;
+}
+
 /** Explains a failed update or update check, including Unraid versions that can't do it. */
 export function dockerUpdateError(err) {
   const msg = String(err?.message || err || '');
@@ -628,6 +638,7 @@ export const unraid = {
     try {
       return await gql(s, 'mutation ($id: PrefixedID!) { docker { updateContainer(id: $id) { id state status } } }', { id }, { timeout: UPDATE_TIMEOUT });
     } catch (err) {
+      if (gaveUpWaiting(err)) throw stillRunning();
       throw new Error(dockerUpdateError(err));
     }
   },
@@ -636,6 +647,7 @@ export const unraid = {
     try {
       return await gql(s, 'mutation { refreshDockerDigests }', undefined, { timeout: CHECK_TIMEOUT });
     } catch (err) {
+      if (gaveUpWaiting(err)) throw stillRunning();
       throw new Error(dockerUpdateError(err));
     }
   },
