@@ -66,9 +66,11 @@ The Unraid API key needs update access to Docker, VMs, Array and Notifications f
   </Changes>
   <Date>2026-10-31</Date>
   <License>MIT</License>
-  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/home.png</Screenshot>
-  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/library.png</Screenshot>
-  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/server.png</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/home.jpg</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/library.jpg</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/activity.jpg</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/server.jpg</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/settings.jpg</Screenshot>
   <Config Name="WebUI port" Target="8484" Default="8484" Mode="tcp" Description="Port for the web app. Open http://[your-unraid-ip]:[this port] on your phone." Type="Port" Display="always" Required="true" Mask="false">8484</Config>
   <Config Name="Appdata" Target="/config" Default="/mnt/user/appdata/deckarr" Mode="rw" Description="Settings, password hash and service API keys." Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/deckarr</Config>
   <Config Name="App password" Target="APP_PASSWORD" Default="" Description="Optional. Leave blank to create a password in the app on first launch (recommended)." Type="Variable" Display="advanced" Required="false" Mask="true"/>
