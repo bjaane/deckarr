@@ -29,9 +29,31 @@ export function render(root, ctx, params) {
     return;
   }
 
+  // ---------- several servers: show one at a time ----------
+  const servers = services.filter((s) => s.type === 'unraid' || s.type === 'proxmox');
+  let selected = null;
+  if (servers.length > 1) {
+    const wanted = params?.get('server') || params?.get('notifications') || readPick();
+    selected = (servers.find((s) => s.id === wanted) || servers[0]).id;
+    savePick(selected);
+    const current = servers.find((s) => s.id === selected);
+    head.setTitle(current.name);
+    head.setSub(`${current.type === 'proxmox' ? 'Proxmox VE' : 'Unraid'} · ${servers.length} servers`);
+    const picker = chips(
+      servers.map((s) => ({ label: s.name, value: s.id })),
+      selected,
+      (id) => {
+        savePick(id);
+        ctx.navigate('server', { server: id });
+      },
+    );
+    root.append(h('div', { class: 'server-picker' }, picker.el));
+  }
+  const shown = (s) => !selected || s.id === selected;
+
   // ---------- Unraid ----------
-  for (const s of unraids) {
-    const overview = section(unraids.length > 1 ? s.name : 'Array');
+  for (const s of unraids.filter(shown)) {
+    const overview = section('Array');
     const manage = section('Manage');
     const containers = section('Containers');
     // Shown only once Unraid reports at least one VM.
@@ -96,7 +118,7 @@ export function render(root, ctx, params) {
       try {
         const o = await unraid.overview(s);
         last = o;
-        if (o.hostname && unraids.length === 1) head.setTitle(o.hostname);
+        if (o.hostname && servers.length === 1) head.setTitle(o.hostname);
         const kb = o.array?.capacity?.kilobytes || {};
         const total = Number(kb.total) * 1024 || 0;
         const used = Number(kb.used) * 1024 || 0;
@@ -525,7 +547,7 @@ export function render(root, ctx, params) {
   }
 
   // ---------- Proxmox VE ----------
-  for (const s of proxmoxes) renderProxmox(root, ctx, s, { head, multiple: proxmoxes.length + unraids.length > 1 });
+  for (const s of proxmoxes.filter(shown)) renderProxmox(root, ctx, s, { head, multiple: servers.length > 1 });
 
   // ---------- Jellyfin ----------
   for (const s of jellyfins) {
@@ -656,3 +678,19 @@ function containerIcon(s, c) {
   return lead;
 }
 
+// The server picked last on this device.
+const PICK_KEY = 'deckarr.server';
+function readPick() {
+  try {
+    return localStorage.getItem(PICK_KEY);
+  } catch {
+    return null;
+  }
+}
+function savePick(id) {
+  try {
+    localStorage.setItem(PICK_KEY, id);
+  } catch {
+    /* private mode: the first server is shown instead */
+  }
+}

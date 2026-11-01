@@ -40,7 +40,7 @@ const nodeLabel = (results, node) => (results.length > 1 ? [h('p', { class: 'gro
 // ---------- the Server tab section ----------
 
 export function renderProxmox(root, ctx, s, { head, multiple }) {
-  const overview = section(multiple ? s.name : 'Proxmox');
+  const overview = section('Overview');
   const manage = section('Manage');
   const guestsSec = section('VMs and containers');
   root.append(overview.el, manage.el, guestsSec.el);
@@ -87,7 +87,7 @@ export function renderProxmox(root, ctx, s, { head, multiple }) {
       nodes.sort((a, b) => String(a.node).localeCompare(String(b.node)));
       const details = await perNode(online(), (node) => proxmox.nodeStatus(s, node));
       if (nodes.length === 1 && !multiple) head.setTitle(nodes[0].node);
-      overview.setAside(nodes.length > 1 ? `${online().length} of ${nodes.length} nodes online` : null);
+      overview.setAside(nodes.length > 1 ? `${online().length} of ${nodes.length} online` : null);
       overview.set(
         nodes.map((n) => {
           const st = details.find((d) => d.node === n.node)?.data;
@@ -173,7 +173,7 @@ export function renderProxmox(root, ctx, s, { head, multiple }) {
       }
       const sub = [
         `${kind(g)} ${g.vmid}`,
-        multiple || online().length > 1 ? g.node : null,
+        online().length > 1 ? g.node : null,
         isRunning ? `CPU ${Math.round((g.cpu || 0) * 100)}% · ${fmt.bytes(g.mem)} of ${fmt.bytes(g.maxmem)}` : g.lock ? `Locked (${g.lock})` : 'Stopped',
       ].filter(Boolean);
       return h(
