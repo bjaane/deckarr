@@ -54,6 +54,26 @@ docker run -d --name deckarr --restart unless-stopped \
 
 The container fixes the permissions of `/config` itself and then runs as `PUID`/`PGID` (default `99`/`100`, Unraid's `nobody:users`).
 
+## Install on Proxmox VE
+
+Run this in the Proxmox shell (node > **Shell**, or SSH as root):
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/bjaane/deckarr/main/scripts/proxmox-install.sh)"
+```
+
+It creates a small Debian LXC container (1 CPU, 512 MB memory, 4 GB disk, DHCP on `vmbr0`) and installs Deckarr in it, without Docker. It shows the settings and asks before it creates anything, then prints the address to open. The container starts with the host.
+
+To change the defaults, put settings in front of the command, for example `CTID=150 STORAGE=local-zfs IP=192.168.1.50/24 GATEWAY=192.168.1.1`. The full list is at the top of [the script](scripts/proxmox-install.sh).
+
+Update Deckarr later with:
+
+```bash
+pct exec <container-id> -- deckarr-update
+```
+
+Settings are kept in `/var/lib/deckarr` inside the container. Deckarr also runs fine with Docker on Proxmox, in a VM or LXC that already has Docker; use the Docker command above.
+
 ### First run on your phone
 
 1. Open your browser and go to `http://<your-unraid-ip>:8484`.

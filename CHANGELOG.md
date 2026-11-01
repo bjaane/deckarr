@@ -5,6 +5,8 @@ Releases are published automatically: bump `version` in `package.json`, add a se
 ## 1.5.0
 
 ### New
+- **Several servers side by side.** With more than one Unraid or Proxmox server, the Server tab has a row of server buttons and shows one server at a time, titled with its name. Deckarr remembers your choice, and a push notification opens the right server.
+- **Install on Proxmox with one command.** scripts/proxmox-install.sh creates a small Debian LXC container with Deckarr on a Proxmox host, no Docker needed, and deckarr-update updates it later.
 - **Proxmox VE support.** Add Proxmox under Settings with an API token. The Server tab shows each node (CPU, memory, load, root disk, uptime) and all VMs and LXC containers with Start, Shut down, Restart, Pause, Resume, Stop and Reset. Manage has storage, disk health (SMART), package updates, recent tasks with their logs, and the system log. Proxmox VE 7 or newer.
 - **Push notifications for Unraid alerts.** Turn them on per device in Settings > Notifications and choose Alerts, Warnings or Everything. The Deckarr server checks Unraid every minute and sends new notifications straight to your phone's push service, even when Deckarr is closed. Tapping one opens Unraid's notification list. Works on iPhone and iPad (iOS 16.4+, added to the Home Screen), Android and desktop browsers. Needs Deckarr to be opened over https://, for example through Tailscale Serve.
 
