@@ -2,6 +2,11 @@
 
 Releases are published automatically: bump `version` in `package.json`, add a section for it here, run `node scripts/sync-template.mjs`, and merge into `main`.
 
+## 1.5.1
+
+### New
+- **Push notifications for Proxmox VE.** Server alerts now cover Proxmox too: failed tasks such as backups or VM starts, nodes going offline and coming back, storage over 90% full, and disks failing their SMART check. Nothing to set up in Proxmox, since Deckarr uses the same API token. Tapping a notification opens the matching list (tasks, storage or disks), and with several servers each notification starts with the server's name.
+
 ## 1.5.0
 
 ### New

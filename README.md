@@ -121,18 +121,25 @@ Add the home screen icon from the address you'll use most, because the icon reme
 
 ---
 
-## Push notifications for Unraid alerts
+## Push notifications for server alerts
 
-Deckarr can send Unraid's notifications to your phone, even when Deckarr is closed. Turn it on per device in **Settings > Notifications** and choose **Alerts**, **Warnings** (alerts and warnings) or **Everything**. **Send a test notification** checks the whole path.
+Deckarr can send alerts from Unraid and Proxmox VE to your phone, even when Deckarr is closed. Turn it on per device in **Settings > Notifications** and choose **Alerts**, **Warnings** (alerts and warnings) or **Everything**. **Send a test notification** checks the whole path.
 
-The Deckarr server checks Unraid for new notifications every minute. It sends each new one straight to your device's push service (Apple, Google or Mozilla), encrypted for that device. No account, app store or relay server is involved. Tapping a notification opens Unraid's notification list in Deckarr.
+The Deckarr server checks your servers every minute and sends what's new straight to your device's push service (Apple, Google or Mozilla), encrypted for that device. No account, app store or relay server is involved. With several servers, each notification starts with the server's name.
+
+| Server | You get | Tapping it opens |
+| --- | --- | --- |
+| Unraid | Unraid's own notifications (disk temperatures, parity checks, array errors, and so on) at their own level | Unraid's notification list |
+| Proxmox VE | **Alert:** a failed task (backup, VM or container start, migration), a node going offline, a disk failing its SMART check. **Warning:** a task finished with warnings, storage over 90% full. **Everything:** also a node coming back online | The task list, storage or disks |
+
+Nothing needs to be set up in Proxmox: Deckarr reads it with the same API token. Disk health is checked every 15 minutes, because reading SMART data is slower.
 
 What you need:
 
 - **HTTPS.** Browsers only allow notifications on `https://` addresses. Open Deckarr through Tailscale Serve or a reverse proxy (see above) and turn notifications on from that address.
 - **iPhone and iPad:** iOS 16.4 or newer, with Deckarr added to the Home Screen and opened from its icon.
 - **Android:** Chrome, Vanadium, Samsung Internet and Edge deliver notifications through Google Play services. On **GrapheneOS**, install sandboxed Google Play, or use **Firefox**, which has its own push service.
-- **The Unraid API key** needs read access to notifications. The Admin role or the permissions listed above already include it.
+- **The Unraid API key** needs read access to notifications. The Admin role or the permissions listed above already include it. **The Proxmox token** needs the PVEAuditor role, which also covers tasks, storage and disks.
 - **The Deckarr container** needs internet access to reach the push services.
 
 Which events Unraid reports, such as disk temperatures, parity check results or array errors, is set in Unraid under **Settings > Notification Settings**.
@@ -196,7 +203,7 @@ If Sonarr and Jellyfin see the media at different paths (`/tv` vs `/data/tv`), f
 | *… uses a certificate Deckarr doesn't trust* | Turn on **Allow self-signed certificate** for that service |
 | *Unraid: Cannot query field …* | Update Unraid. The API needs Unraid 7.2 or newer |
 | *qBittorrent has temporarily blocked this server* | Too many failed logins. Wait, then fix the username and password |
-| *Notifications need Deckarr to be opened over https://* | Open Deckarr through Tailscale Serve or a reverse proxy with HTTPS. See [Push notifications](#push-notifications-for-unraid-alerts) |
+| *Notifications need Deckarr to be opened over https://* | Open Deckarr through Tailscale Serve or a reverse proxy with HTTPS. See [Push notifications](#push-notifications-for-server-alerts) |
 | *The browser couldn't set up notifications* (Android) | Chromium browsers need Google Play services for notifications. On GrapheneOS, install sandboxed Google Play, or use Firefox |
 
 The container log in the Docker tab shows server-side errors.
