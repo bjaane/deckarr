@@ -39,7 +39,7 @@ const nodeLabel = (results, node) => (results.length > 1 ? [h('p', { class: 'gro
 
 // ---------- the Server tab section ----------
 
-export function renderProxmox(root, ctx, s, { head, multiple }) {
+export function renderProxmox(root, ctx, s, { head, multiple, open }) {
   const overview = section('Overview');
   const manage = section('Manage');
   const guestsSec = section('VMs and containers');
@@ -118,6 +118,12 @@ export function renderProxmox(root, ctx, s, { head, multiple }) {
         }),
       );
       overview.el.querySelectorAll('.bar').forEach((b) => b.classList.add('meter'));
+      // Opened from a push notification: show what it was about, once the nodes are known.
+      if (open) {
+        const sheet = { tasks: openTasks, storage: openStorage, disks: openDisks }[open];
+        open = null;
+        sheet?.(s, online());
+      }
     } catch (err) {
       overview.set(notice(err.message, { retry: loadOverview }));
     }

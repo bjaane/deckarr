@@ -1,7 +1,8 @@
-// Web Push for Unraid notifications, with no dependencies.
+// Web Push for Unraid and Proxmox VE alerts, with no dependencies.
 //
-// Deckarr checks every Unraid service for new unread notifications once a minute and sends
-// each new one to the devices that turned alerts on. Messages go straight to the browser's
+// Once a minute Deckarr checks every Unraid server for new unread notifications and every
+// Proxmox server for failed tasks, offline nodes, full storage and failing disks, and sends
+// what's new to the devices that turned alerts on. Messages go straight to the browser's
 // push service (Apple, Google or Mozilla), encrypted for that device (RFC 8291) and signed
 // with this server's own VAPID key (RFC 8292). No account or relay is involved.
 
@@ -115,7 +116,10 @@ export class PushStore {
     if (!(level in LEVELS)) level = 'warning';
     const existing = this.find(endpoint);
     // First device after none: start counting from now, so nothing from the quiet period is replayed.
-    if (!this.data.subscriptions.length) this.data.seen = {};
+    if (!this.data.subscriptions.length) {
+      this.data.seen = {};
+      this.data.pve = {};
+    }
     const sub = { endpoint, keys: { p256dh: String(keys.p256dh), auth: String(keys.auth) }, level, name: String(name || '').slice(0, 60), created: existing?.created || new Date().toISOString() };
     if (existing) Object.assign(existing, sub);
     else this.data.subscriptions.push(sub);
@@ -184,45 +188,195 @@ async function unreadNotifications(service) {
   return json.data?.notifications?.list || [];
 }
 
+// ---------- watching Proxmox VE ----------
+
+async function pveGet(service, path) {
+  const res = await callService(service, { path: `/api2/json/${path}`, timeout: 20000 });
+  if (res.status !== 200) throw new Error(`HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ''}`);
+  return JSON.parse(res.body.toString('utf8')).data;
+}
+
+const PVE_TASKS = {
+  vzdump: 'Backup',
+  qmstart: 'VM start',
+  qmstop: 'VM stop',
+  qmshutdown: 'VM shutdown',
+  qmreboot: 'VM restart',
+  qmigrate: 'VM migration',
+  qmclone: 'VM clone',
+  qmsnapshot: 'VM snapshot',
+  vzstart: 'Container start',
+  vzstop: 'Container stop',
+  vzshutdown: 'Container shutdown',
+  vzmigrate: 'Container migration',
+  vzsnapshot: 'Container snapshot',
+  aptupdate: 'Update check',
+  zfsscrub: 'ZFS scrub',
+  startall: 'Start of all guests',
+  stopall: 'Stop of all guests',
+};
+const DISK_CHECK_MS = 15 * 60 * 1000;
+const FULL = 0.9;
+const NOT_FULL = 0.85;
+
+/**
+ * Finds what changed on a Proxmox server since the last look: failed tasks, nodes going
+ * offline or coming back, storage passing 90% and disks whose SMART health turns bad.
+ * Returns [message, importance] pairs. Without a previous state it only records the present.
+ */
+async function proxmoxEvents(service, prev) {
+  const first = !prev;
+  const state = prev || { tasks: [], offline: [], full: [], badDisks: [], diskAt: 0 };
+  const events = [];
+  const link = (open) => `./#/server?server=${encodeURIComponent(service.id)}${open ? `&open=${open}` : ''}`;
+
+  const nodes = (await pveGet(service, 'nodes')) || [];
+  const online = nodes.filter((n) => n.status === 'online').map((n) => n.node);
+
+  // Nodes
+  const offline = nodes.filter((n) => n.status !== 'online').map((n) => n.node);
+  for (const node of offline.filter((n) => !state.offline.includes(n))) {
+    events.push([{ title: `Node ${node} is offline`, body: `Proxmox reports ${node} as offline. Its VMs and containers may be down.`, tag: `pve-node-${node}`, url: link() }, 3]);
+  }
+  for (const node of state.offline.filter((n) => online.includes(n))) {
+    events.push([{ title: `Node ${node} is back online`, body: `${node} is reachable again.`, tag: `pve-node-${node}`, url: link() }, 1]);
+  }
+  state.offline = offline;
+
+  // Failed tasks (failed backups, guests that wouldn't start, ...)
+  let names = null;
+  const guestName = async (id) => {
+    if (!/^\d+$/.test(String(id || ''))) return id || '';
+    names ||= Object.fromEntries(((await pveGet(service, 'cluster/resources?type=vm').catch(() => [])) || []).map((g) => [String(g.vmid), g.name]));
+    return names[id] ? `${names[id]} (${id})` : `ID ${id}`;
+  };
+  const seenTasks = new Set(state.tasks);
+  for (const node of online) {
+    const tasks = (await pveGet(service, `nodes/${encodeURIComponent(node)}/tasks?limit=50`).catch(() => [])) || [];
+    for (const t of tasks) {
+      if (!t.endtime || !t.status || t.status === 'OK' || seenTasks.has(t.upid)) continue;
+      seenTasks.add(t.upid);
+      state.tasks.push(t.upid);
+      const what = PVE_TASKS[t.type] || `Task ${t.type}`;
+      const warnings = /^WARNINGS/i.test(t.status);
+      const who = t.id ? `${await guestName(t.id)} on ${node}` : node;
+      events.push([{ title: warnings ? `${what} finished with warnings` : `${what} failed`, body: `${who}: ${t.status}`, tag: `pve-task-${t.upid}`, url: link('tasks') }, warnings ? 2 : 3]);
+    }
+  }
+  state.tasks = state.tasks.slice(-500);
+
+  // Storage, counted once even when shared between nodes
+  const storages = new Map();
+  for (const node of online) {
+    for (const st of (await pveGet(service, `nodes/${encodeURIComponent(node)}/storage`).catch(() => [])) || []) {
+      if (!st.total || !st.active) continue;
+      const key = st.shared ? st.storage : `${node}/${st.storage}`;
+      storages.set(key, { ...st, node, key });
+    }
+  }
+  for (const st of storages.values()) {
+    const used = st.used / st.total;
+    const isFull = state.full.includes(st.key);
+    if (used >= FULL && !isFull) {
+      state.full.push(st.key);
+      events.push([{ title: `Storage ${st.storage} is ${Math.round(used * 100)}% full`, body: `${st.shared ? 'Shared storage' : `On ${st.node}`}: ${Math.round((st.avail || 0) / 1e9)} GB left.`, tag: `pve-storage-${st.key}`, url: link('storage') }, 2]);
+    } else if (used < NOT_FULL && isFull) {
+      state.full = state.full.filter((k) => k !== st.key);
+    }
+  }
+
+  // Disk health. Reading SMART is slower, so only every 15 minutes.
+  if (Date.now() - state.diskAt >= DISK_CHECK_MS) {
+    state.diskAt = Date.now();
+    const bad = [];
+    for (const node of online) {
+      for (const d of (await pveGet(service, `nodes/${encodeURIComponent(node)}/disks/list`).catch(() => [])) || []) {
+        const health = String(d.health || '').toUpperCase();
+        if (!health || ['PASSED', 'OK', 'UNKNOWN'].includes(health)) continue;
+        const key = `${node}:${d.devpath}`;
+        bad.push(key);
+        if (!state.badDisks.includes(key)) {
+          events.push([{ title: `Disk ${d.devpath} on ${node} is failing`, body: `SMART health: ${health}. ${d.model || ''}`.trim(), tag: `pve-disk-${key}`, url: link('disks') }, 3]);
+        }
+      }
+    }
+    state.badDisks = bad;
+  }
+
+  return { state, events: first ? [] : events };
+}
+
 export function startWatching(pushStore, configStore) {
   const failing = new Set();
+  const report = (service, what, err) => {
+    if (err) {
+      if (!failing.has(service.id)) console.error(`Push: can't read ${service.name} ${what}: ${err.message}`);
+      failing.add(service.id);
+    } else if (failing.delete(service.id)) {
+      console.log(`Push: reading ${service.name} ${what} works again.`);
+    }
+  };
+  const servers = () => configStore.list().filter((s) => s.type === 'unraid' || s.type === 'proxmox');
+  // With several servers, the notification title says which one it's about.
+  const label = (service) => (servers().length > 1 ? service.name : undefined);
+
+  async function checkUnraid(service) {
+    let list;
+    try {
+      list = await unreadNotifications(service);
+      report(service, 'notifications');
+    } catch (err) {
+      report(service, 'notifications', err);
+      return;
+    }
+    const seen = pushStore.data.seen[service.id];
+    const known = new Set(seen || []);
+    const fresh = list.filter((n) => !known.has(n.id));
+    // The first look at a server only records what's there, so turning alerts on doesn't replay old ones.
+    if (seen) {
+      for (const n of fresh.reverse()) {
+        await sendToAll(
+          pushStore,
+          {
+            title: n.subject || n.title || 'Unraid',
+            body: n.description || '',
+            tag: `unraid-${n.id}`,
+            importance: n.importance,
+            url: `./#/server?notifications=${encodeURIComponent(service.id)}`,
+            server: label(service),
+          },
+          IMPORTANCE[n.importance] || 1,
+        );
+      }
+    }
+    if (!seen || fresh.length) {
+      pushStore.data.seen[service.id] = [...known, ...fresh.map((n) => n.id)].slice(-SEEN_LIMIT);
+      await pushStore.save();
+    }
+  }
+
+  async function checkProxmox(service) {
+    pushStore.data.pve ||= {};
+    let result;
+    try {
+      result = await proxmoxEvents(service, pushStore.data.pve[service.id]);
+      report(service, 'status');
+    } catch (err) {
+      report(service, 'status', err);
+      return;
+    }
+    for (const [message, importance] of result.events) {
+      await sendToAll(pushStore, { ...message, importance: Object.keys(IMPORTANCE).find((k) => IMPORTANCE[k] === importance), server: label(service) }, importance);
+    }
+    pushStore.data.pve[service.id] = result.state;
+    await pushStore.save();
+  }
 
   async function tick() {
     if (!pushStore.data.subscriptions.length) return;
-    for (const service of configStore.list().filter((s) => s.type === 'unraid')) {
-      let list;
-      try {
-        list = await unreadNotifications(service);
-        if (failing.delete(service.id)) console.log(`Push: reading ${service.name} notifications works again.`);
-      } catch (err) {
-        if (!failing.has(service.id)) console.error(`Push: can't read ${service.name} notifications: ${err.message}`);
-        failing.add(service.id);
-        continue;
-      }
-      const seen = pushStore.data.seen[service.id];
-      const known = new Set(seen || []);
-      const fresh = list.filter((n) => !known.has(n.id));
-      // The first look at a server only records what's there, so turning alerts on doesn't replay old ones.
-      if (seen) {
-        for (const n of fresh.reverse()) {
-          await sendToAll(
-            pushStore,
-            {
-              title: n.subject || n.title || 'Unraid',
-              body: n.description || '',
-              tag: `unraid-${n.id}`,
-              importance: n.importance,
-              url: `./#/server?notifications=${encodeURIComponent(service.id)}`,
-              server: configStore.list().filter((s) => s.type === 'unraid').length > 1 ? service.name : undefined,
-            },
-            IMPORTANCE[n.importance] || 1,
-          );
-        }
-      }
-      if (!seen || fresh.length) {
-        pushStore.data.seen[service.id] = [...known, ...fresh.map((n) => n.id)].slice(-SEEN_LIMIT);
-        await pushStore.save();
-      }
+    for (const service of servers()) {
+      if (service.type === 'unraid') await checkUnraid(service);
+      else await checkProxmox(service);
     }
   }
 

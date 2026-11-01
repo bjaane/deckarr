@@ -327,7 +327,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/push/test' && m === 'POST') {
     const sub = pushStore.find((await readJson(req)).endpoint);
     if (!sub) throw new HttpError(404, 'Notifications are off on this device.');
-    const result = await sendPush(sub, { title: 'Deckarr', body: 'Notifications work. Unraid alerts will show up like this.', tag: 'deckarr-test', url: './#/settings' }, pushStore.data.vapid);
+    const result = await sendPush(sub, { title: 'Deckarr', body: 'Notifications work. Server alerts will show up like this.', tag: 'deckarr-test', url: './#/settings' }, pushStore.data.vapid);
     if (result === 'gone') {
       await pushStore.remove(sub.endpoint);
       throw new HttpError(410, 'This device’s notification subscription expired. Turn notifications off and on again.');

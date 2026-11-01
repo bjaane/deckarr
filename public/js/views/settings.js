@@ -396,13 +396,13 @@ function openPasswordForm() {
 
 async function drawNotifications(sec, state) {
   const note = (text) => h('p', { class: 'section-note', text });
-  if (!state.services.some((s) => s.type === 'unraid')) {
-    sec.set(note('Add Unraid as a service to get its alerts on this device, even when Deckarr is closed.'));
+  if (!state.services.some((s) => s.type === 'unraid' || s.type === 'proxmox')) {
+    sec.set(note('Add Unraid or Proxmox VE as a service to get its alerts on this device, even when Deckarr is closed.'));
     return;
   }
   const reason = push.unsupportedReason();
   if (reason) {
-    sec.set(h('div', { class: 'list' }, h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: 'Unraid alerts' }), h('span', { class: 'row-sub wrap', text: reason })))));
+    sec.set(h('div', { class: 'list' }, h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: 'Server alerts' }), h('span', { class: 'row-sub wrap', text: reason })))));
     return;
   }
 
@@ -421,10 +421,10 @@ async function drawNotifications(sec, state) {
     try {
       if (on) {
         await push.enable(chosen);
-        toast('Unraid alerts are on for this device');
+        toast('Server alerts are on for this device');
       } else {
         await push.disable();
-        toast('Unraid alerts are off for this device');
+        toast('Server alerts are off for this device');
       }
     } catch (err) {
       input.checked = !on;
@@ -433,13 +433,13 @@ async function drawNotifications(sec, state) {
       input.disabled = false;
       drawNotifications(sec, state);
     }
-  }, 'Unraid alerts on this device');
+  }, 'Server alerts on this device');
 
   const rows = [
     h(
       'div',
       { class: 'row' },
-      h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: 'Unraid alerts on this device' }), h('span', { class: 'row-sub wrap', text: 'Get Unraid’s notifications here, even when Deckarr is closed.' })),
+      h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: 'Server alerts on this device' }), h('span', { class: 'row-sub wrap', text: 'Get alerts from Unraid and Proxmox here, even when Deckarr is closed.' })),
       toggle,
     ),
   ];
@@ -459,7 +459,7 @@ async function drawNotifications(sec, state) {
         }
       }),
     );
-    nodes.push(h('p', { class: 'hint', text: 'Alerts: only Unraid’s alerts. Warnings: alerts and warnings. Everything: also normal notices, like a finished parity check.' }));
+    nodes.push(h('p', { class: 'hint', text: 'Alerts: only serious problems, like a failed backup, an offline node or a failing disk. Warnings: also things like nearly full storage. Everything: also normal notices, like a finished parity check or a node back online.' }));
     const test = h('button', { type: 'button', class: 'btn' }, 'Send a test notification');
     test.addEventListener('click', async () => {
       test.disabled = true;
@@ -474,6 +474,6 @@ async function drawNotifications(sec, state) {
     });
     nodes.push(h('div', { class: 'stack' }, test));
   }
-  nodes.push(note('Deckarr checks Unraid for new notifications every minute and sends them straight to your device’s push service (Apple, Google or Mozilla). Which events Unraid reports is set in Unraid under Settings > Notification Settings.'));
+  nodes.push(note('Deckarr checks your servers every minute and sends alerts straight to your device’s push service (Apple, Google or Mozilla). From Unraid you get its own notifications, set in Unraid under Settings > Notification Settings. From Proxmox you get failed tasks such as backups, nodes going offline, storage over 90% full and disks failing their SMART check.'));
   sec.set(...nodes);
 }
