@@ -1406,3 +1406,8 @@ a.row:active {
 .updates .notice-body > div:first-child {
   white-space: pre-line;
 }
+
+.server-picker .chips {
+  margin-top: 0;
+  margin-bottom: 8px;
+}

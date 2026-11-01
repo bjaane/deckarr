@@ -71,6 +71,16 @@ export const SERVICE_TYPES = {
     test: { path: '/System/Info' },
     help: 'In Jellyfin: Dashboard > API Keys > New API key.',
   },
+  proxmox: {
+    label: 'Proxmox VE',
+    category: 'Server',
+    port: 8006,
+    scheme: 'https',
+    auth: 'apikey',
+    test: { path: '/api2/json/version' },
+    help: 'In Proxmox: Datacenter > Permissions > API Tokens > Add. Paste the whole token as user@realm!tokenid=secret. Give it the PVEAuditor role on / to see everything, and PVEVMUser to start and stop VMs and containers. Turn on "Allow self-signed certificate" below unless Proxmox has a real certificate.',
+    keyPlaceholder: 'root@pam!deckarr=xxxxxxxx-xxxx-…',
+  },
   unraid: {
     label: 'Unraid',
     category: 'Server',
@@ -89,7 +99,7 @@ export function publicTypes() {
   return Object.fromEntries(
     Object.entries(SERVICE_TYPES).map(([id, t]) => [
       id,
-      { label: t.label, category: t.category, port: t.port, auth: t.auth, apiKeyOption: Boolean(t.apiKeyOption), help: t.help, apiKeyHelp: t.apiKeyHelp },
+      { label: t.label, category: t.category, port: t.port, scheme: t.scheme || 'http', auth: t.auth, apiKeyOption: Boolean(t.apiKeyOption), help: t.help, apiKeyHelp: t.apiKeyHelp, keyPlaceholder: t.keyPlaceholder },
     ]),
   );
 }

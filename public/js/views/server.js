@@ -1,10 +1,12 @@
 import { h, light, bar, fmt, pageHead, section, skeletonList, notice, emptyState, searchField, chips, confirmAction, runAction, initials, toast, chevron } from '../ui.js';
 import { unraid, jellyfin, prowlarr, healthIssues, byType, webBase, vmErrorMessage } from '../services.js';
+import { renderProxmox } from './proxmox.js';
 import { openDisks, openShares, openParity, openNotifications, openLogs, openContainer, openVm, runVmAction, vmState, vmRunning, vmPaused } from './unraid.js';
 
-export function render(root, ctx) {
+export function render(root, ctx, params) {
   const { services } = ctx.state;
   const unraids = byType(services, 'unraid');
+  const proxmoxes = byType(services, 'proxmox');
   const jellyfins = byType(services, 'jellyfin');
   const prowlarrs = byType(services, 'prowlarr');
   const healthSources = byType(services, 'sonarr', 'radarr', 'lidarr', 'prowlarr', 'bazarr');
@@ -12,14 +14,14 @@ export function render(root, ctx) {
   const head = pageHead('Server');
   root.append(head.el);
 
-  if (!unraids.length && !jellyfins.length && !healthSources.length) {
+  if (!unraids.length && !proxmoxes.length && !jellyfins.length && !healthSources.length) {
     root.append(
       h(
         'div',
         { class: 'section' },
         emptyState({
           title: 'No server tools yet',
-          body: 'Add Unraid to start and stop containers, or Jellyfin to scan libraries and see who’s watching.',
+          body: 'Add Unraid or Proxmox VE to manage your server, VMs and containers, or Jellyfin to scan libraries and see who’s watching.',
           action: { label: 'Add a service', onClick: () => ctx.navigate('settings', { add: '1' }) },
         }),
       ),
@@ -27,9 +29,31 @@ export function render(root, ctx) {
     return;
   }
 
+  // ---------- several servers: show one at a time ----------
+  const servers = services.filter((s) => s.type === 'unraid' || s.type === 'proxmox');
+  let selected = null;
+  if (servers.length > 1) {
+    const wanted = params?.get('server') || params?.get('notifications') || readPick();
+    selected = (servers.find((s) => s.id === wanted) || servers[0]).id;
+    savePick(selected);
+    const current = servers.find((s) => s.id === selected);
+    head.setTitle(current.name);
+    head.setSub(`${current.type === 'proxmox' ? 'Proxmox VE' : 'Unraid'} · ${servers.length} servers`);
+    const picker = chips(
+      servers.map((s) => ({ label: s.name, value: s.id })),
+      selected,
+      (id) => {
+        savePick(id);
+        ctx.navigate('server', { server: id });
+      },
+    );
+    root.append(h('div', { class: 'server-picker' }, picker.el));
+  }
+  const shown = (s) => !selected || s.id === selected;
+
   // ---------- Unraid ----------
-  for (const s of unraids) {
-    const overview = section(unraids.length > 1 ? s.name : 'Array');
+  for (const s of unraids.filter(shown)) {
+    const overview = section('Array');
     const manage = section('Manage');
     const containers = section('Containers');
     // Shown only once Unraid reports at least one VM.
@@ -94,7 +118,7 @@ export function render(root, ctx) {
       try {
         const o = await unraid.overview(s);
         last = o;
-        if (o.hostname && unraids.length === 1) head.setTitle(o.hostname);
+        if (o.hostname && servers.length === 1) head.setTitle(o.hostname);
         const kb = o.array?.capacity?.kilobytes || {};
         const total = Number(kb.total) * 1024 || 0;
         const used = Number(kb.used) * 1024 || 0;
@@ -507,6 +531,12 @@ export function render(root, ctx) {
       );
     }
 
+    // Opened from a push notification: show that server's notifications.
+    if (params?.get('notifications') === s.id) {
+      history.replaceState(history.state, '', '#/server');
+      openNotifications(s, { onChange: loadOverview });
+    }
+
     drawManage(null);
     loadOverview();
     loadContainers(true);
@@ -515,6 +545,9 @@ export function render(root, ctx) {
     ctx.poll(loadOverview, 15000);
     ctx.poll(loadVms, 30000);
   }
+
+  // ---------- Proxmox VE ----------
+  for (const s of proxmoxes.filter(shown)) renderProxmox(root, ctx, s, { head, multiple: servers.length > 1 });
 
   // ---------- Jellyfin ----------
   for (const s of jellyfins) {
@@ -645,3 +678,19 @@ function containerIcon(s, c) {
   return lead;
 }
 
+// The server picked last on this device.
+const PICK_KEY = 'deckarr.server';
+function readPick() {
+  try {
+    return localStorage.getItem(PICK_KEY);
+  } catch {
+    return null;
+  }
+}
+function savePick(id) {
+  try {
+    localStorage.setItem(PICK_KEY, id);
+  } catch {
+    /* private mode: the first server is shown instead */
+  }
+}

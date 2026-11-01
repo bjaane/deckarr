@@ -15,10 +15,10 @@ A free, self-hosted web app for your media server, made for phones and tablets: 
 | Home | Service status, the next 7 days of episodes, movies and albums, active downloads, and what's playing on Jellyfin |
 | Library | Browse Sonarr, Radarr and Lidarr. Search for releases, monitor titles or seasons, remove titles, add new series, movies and artists |
 | Activity | The *arr queue, qBittorrent (pause, resume, delete) and SABnzbd |
-| Server | Unraid array, CPU, RAM, CPU temperature and power, network traffic, UPS. Disks with temperatures and errors, shares, parity checks (start, pause, cancel, history), Unraid notifications (archive, delete), system logs. Containers: start, stop, restart, pause, update (one or all), details, ports and logs, filters and batch actions. VMs: start, shut down, pause, resume, restart, force stop. Jellyfin library scan, Prowlarr indexer status, health warnings |
+| Server | Unraid array, CPU, RAM, CPU temperature and power, network traffic, UPS. Disks with temperatures and errors, shares, parity checks (start, pause, cancel, history), Unraid notifications (archive, delete), system logs. Containers: start, stop, restart, pause, update (one or all), details, ports and logs, filters and batch actions. VMs: start, shut down, pause, resume, restart, force stop. **Proxmox VE:** nodes with CPU, memory, load and uptime; VMs and LXC containers (start, shut down, restart, pause, stop, reset); storage, disk health, package updates, tasks and system log. Jellyfin library scan, Prowlarr indexer status, health warnings |
 | Settings | Add services, test connections, change the password |
 
-Supported services: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid 7.2+.
+Supported services: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin, Unraid 7.2+ and Proxmox VE 7+.
 
 API keys are stored only on the server (`/config/config.json`, mode 600). Your phone never sees them; it talks to Deckarr, and Deckarr talks to your services.
 
@@ -54,6 +54,26 @@ docker run -d --name deckarr --restart unless-stopped \
 
 The container fixes the permissions of `/config` itself and then runs as `PUID`/`PGID` (default `99`/`100`, Unraid's `nobody:users`).
 
+## Install on Proxmox VE
+
+Run this in the Proxmox shell (node > **Shell**, or SSH as root):
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/bjaane/deckarr/main/scripts/proxmox-install.sh)"
+```
+
+It creates a small Debian LXC container (1 CPU, 512 MB memory, 4 GB disk, DHCP on `vmbr0`) and installs Deckarr in it, without Docker. It shows the settings and asks before it creates anything, then prints the address to open. The container starts with the host.
+
+To change the defaults, put settings in front of the command, for example `CTID=150 STORAGE=local-zfs IP=192.168.1.50/24 GATEWAY=192.168.1.1`. The full list is at the top of [the script](scripts/proxmox-install.sh).
+
+Update Deckarr later with:
+
+```bash
+pct exec <container-id> -- deckarr-update
+```
+
+Settings are kept in `/var/lib/deckarr` inside the container. Deckarr also runs fine with Docker on Proxmox, in a VM or LXC that already has Docker; use the Docker command above.
+
 ### First run on your phone
 
 1. Open your browser and go to `http://<your-unraid-ip>:8484`.
@@ -85,6 +105,7 @@ The Android back button closes open panels before it leaves a page.
 | SABnzbd | Config > General > Security > API Key (not the NZB key) |
 | qBittorrent | qBittorrent 5.2+: an API key from Tools > Options > Web UI. Older versions: Web UI username and password, or leave both blank if qBittorrent skips login for your subnet |
 | Jellyfin | Dashboard > API Keys > New API key |
+| Proxmox VE | Datacenter > Permissions > API Tokens > Add. Paste the whole token as `user@realm!tokenid=secret`, at the address `https://<host>:8006` with **Allow self-signed certificate** on. Give the token the **PVEAuditor** role on `/` to see everything and **PVEVMUser** to start and stop guests. Package updates also need **Sys.Modify** (for example **PVESysAdmin**). If **Privilege Separation** is on, the roles must be given to the token itself, not only to the user |
 | Unraid 7.2+ | Settings > Management Access > API Keys. Use the Admin role, or read access to everything plus update access to Docker, VMs, Array and Notifications (needed for container, VM, parity and notification actions) |
 
 ---
@@ -97,6 +118,24 @@ Don't forward port 8484 to the internet. Use one of these instead:
 - **Reverse proxy with HTTPS** (Nginx Proxy Manager, SWAG, Caddy): point it at port 8484. Sub-paths such as `https://example.com/deckarr/` work. Pass `X-Forwarded-Proto` so the session cookie is marked secure.
 
 Add the home screen icon from the address you'll use most, because the icon remembers that address.
+
+---
+
+## Push notifications for Unraid alerts
+
+Deckarr can send Unraid's notifications to your phone, even when Deckarr is closed. Turn it on per device in **Settings > Notifications** and choose **Alerts**, **Warnings** (alerts and warnings) or **Everything**. **Send a test notification** checks the whole path.
+
+The Deckarr server checks Unraid for new notifications every minute. It sends each new one straight to your device's push service (Apple, Google or Mozilla), encrypted for that device. No account, app store or relay server is involved. Tapping a notification opens Unraid's notification list in Deckarr.
+
+What you need:
+
+- **HTTPS.** Browsers only allow notifications on `https://` addresses. Open Deckarr through Tailscale Serve or a reverse proxy (see above) and turn notifications on from that address.
+- **iPhone and iPad:** iOS 16.4 or newer, with Deckarr added to the Home Screen and opened from its icon.
+- **Android:** Chrome, Vanadium, Samsung Internet and Edge deliver notifications through Google Play services. On **GrapheneOS**, install sandboxed Google Play, or use **Firefox**, which has its own push service.
+- **The Unraid API key** needs read access to notifications. The Admin role or the permissions listed above already include it.
+- **The Deckarr container** needs internet access to reach the push services.
+
+Which events Unraid reports, such as disk temperatures, parity check results or array errors, is set in Unraid under **Settings > Notification Settings**.
 
 ### Backup address for a service
 
@@ -131,7 +170,7 @@ Every push to the `test` branch publishes `ghcr.io/bjaane/deckarr:test`. To use 
 
 ## Back up
 
-Back up `/mnt/user/appdata/deckarr`. It contains your API keys, so treat it like a password file.
+Back up `/mnt/user/appdata/deckarr`. It contains your API keys and the key that signs push notifications (`push.json`), so treat it like a password file. If `push.json` is lost, turn notifications off and on again on each device.
 
 ---
 
@@ -157,6 +196,8 @@ If Sonarr and Jellyfin see the media at different paths (`/tv` vs `/data/tv`), f
 | *… uses a certificate Deckarr doesn't trust* | Turn on **Allow self-signed certificate** for that service |
 | *Unraid: Cannot query field …* | Update Unraid. The API needs Unraid 7.2 or newer |
 | *qBittorrent has temporarily blocked this server* | Too many failed logins. Wait, then fix the username and password |
+| *Notifications need Deckarr to be opened over https://* | Open Deckarr through Tailscale Serve or a reverse proxy with HTTPS. See [Push notifications](#push-notifications-for-unraid-alerts) |
+| *The browser couldn't set up notifications* (Android) | Chromium browsers need Google Play services for notifications. On GrapheneOS, install sandboxed Google Play, or use Firefox |
 
 The container log in the Docker tab shows server-side errors.
 
@@ -168,6 +209,7 @@ The container log in the Docker tab shows server-side errors.
 server/         Node.js server, no dependencies
   index.js      routes, sign-in, static files
   upstream.js   talks to each service, injects credentials
+  push.js       Unraid push notifications (Web Push, no dependencies)
   types.js      list of supported services
 public/         the app (plain JavaScript, no build step)
   js/services.js  one adapter per service

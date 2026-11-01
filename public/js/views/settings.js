@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import * as push from '../notifications.js';
 import { canPrompt, promptInstall, onInstallChange, isInstalled, installSteps, needsHttpsForApp } from '../install.js';
 import { h, icon, light, pageHead, section, notice, openSheet, confirmAction, toast, switchInput, segmented, chevron, initials } from '../ui.js';
 
@@ -58,6 +59,11 @@ export function render(root, ctx, params) {
 
   drawServices();
   loadStatus();
+
+  // ---- notifications ----
+  const notes = section('Notifications');
+  root.append(notes.el);
+  drawNotifications(notes, state);
 
   // ---- account ----
   const account = section('Account');
@@ -171,7 +177,7 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
       type: 'url',
       inputmode: 'url',
       value: existing?.url || '',
-      placeholder: `http://192.168.1.10:${meta.port}`,
+      placeholder: `${meta.scheme || 'http'}://192.168.1.10:${meta.port}`,
       autocomplete: 'off',
       autocapitalize: 'off',
       autocorrect: 'off',
@@ -179,13 +185,13 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
     });
     const secretAttrs = { autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' };
     const apiKey = meta.auth === 'apikey' || meta.apiKeyOption
-      ? h('input', { type: 'password', placeholder: existing?.hasApiKey ? 'Saved. Leave blank to keep it' : 'Paste the API key', ...secretAttrs })
+      ? h('input', { type: 'password', placeholder: existing?.hasApiKey ? 'Saved. Leave blank to keep it' : meta.keyPlaceholder || 'Paste the API key', ...secretAttrs })
       : null;
     const username = meta.auth === 'login' ? h('input', { type: 'text', value: existing?.username || '', placeholder: 'admin', ...secretAttrs }) : null;
     const password = meta.auth === 'login'
       ? h('input', { type: 'password', placeholder: existing?.hasPassword ? 'Saved. Leave blank to keep it' : 'Password', ...secretAttrs })
       : null;
-    const backupUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.backupUrl || '', placeholder: `http://tower.tailnet.ts.net:${meta.port}`, ...secretAttrs });
+    const backupUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.backupUrl || '', placeholder: `${meta.scheme || 'http'}://tower.tailnet.ts.net:${meta.port}`, ...secretAttrs });
     const webUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.webUrl || '', placeholder: 'Same as the address above', ...secretAttrs });
     // Services that take either an API key or a sign-in (qBittorrent 5.2+).
     let authMode = meta.auth === 'apikey' || (meta.apiKeyOption && (existing ? existing.hasApiKey : true)) ? 'apikey' : 'login';
@@ -384,4 +390,90 @@ function openPasswordForm() {
     h('div', { class: 'stack' }, save),
   );
   setTimeout(() => current.focus(), 350);
+}
+
+// ---------- Unraid push notifications ----------
+
+async function drawNotifications(sec, state) {
+  const note = (text) => h('p', { class: 'section-note', text });
+  if (!state.services.some((s) => s.type === 'unraid')) {
+    sec.set(note('Add Unraid as a service to get its alerts on this device, even when Deckarr is closed.'));
+    return;
+  }
+  const reason = push.unsupportedReason();
+  if (reason) {
+    sec.set(h('div', { class: 'list' }, h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: 'Unraid alerts' }), h('span', { class: 'row-sub wrap', text: reason })))));
+    return;
+  }
+
+  let level = null;
+  try {
+    level = await push.currentLevel();
+  } catch (err) {
+    sec.set(notice(err.message, { retry: () => drawNotifications(sec, state) }));
+    return;
+  }
+  let chosen = level || 'warning';
+  const enabled = Boolean(level);
+
+  const toggle = switchInput(enabled, async (on, input) => {
+    input.disabled = true;
+    try {
+      if (on) {
+        await push.enable(chosen);
+        toast('Unraid alerts are on for this device');
+      } else {
+        await push.disable();
+        toast('Unraid alerts are off for this device');
+      }
+    } catch (err) {
+      input.checked = !on;
+      toast(err.message, 'bad');
+    } finally {
+      input.disabled = false;
+      drawNotifications(sec, state);
+    }
+  }, 'Unraid alerts on this device');
+
+  const rows = [
+    h(
+      'div',
+      { class: 'row' },
+      h('span', { class: 'row-main' }, h('span', { class: 'row-title', text: 'Unraid alerts on this device' }), h('span', { class: 'row-sub wrap', text: 'Get Unraid’s notifications here, even when Deckarr is closed.' })),
+      toggle,
+    ),
+  ];
+  const nodes = [h('div', { class: 'list' }, rows)];
+
+  if (enabled) {
+    nodes.push(
+      h('p', { class: 'group-label', text: 'Send me' }),
+      segmented(push.LEVEL_OPTIONS, chosen, async (v) => {
+        try {
+          await push.setLevel(v);
+          chosen = v;
+          toast('Saved');
+        } catch (err) {
+          toast(err.message, 'bad');
+          drawNotifications(sec, state);
+        }
+      }),
+    );
+    nodes.push(h('p', { class: 'hint', text: 'Alerts: only Unraid’s alerts. Warnings: alerts and warnings. Everything: also normal notices, like a finished parity check.' }));
+    const test = h('button', { type: 'button', class: 'btn' }, 'Send a test notification');
+    test.addEventListener('click', async () => {
+      test.disabled = true;
+      try {
+        await push.sendTest();
+        toast('Test sent. It should arrive in a few seconds.');
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally {
+        test.disabled = false;
+      }
+    });
+    nodes.push(h('div', { class: 'stack' }, test));
+  }
+  nodes.push(note('Deckarr checks Unraid for new notifications every minute and sends them straight to your device’s push service (Apple, Google or Mozilla). Which events Unraid reports is set in Unraid under Settings > Notification Settings.'));
+  sec.set(...nodes);
 }
