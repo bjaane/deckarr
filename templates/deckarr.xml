@@ -17,6 +17,13 @@
   <ExtraSearchTerms>sonarr radarr lidarr prowlarr bazarr qbittorrent sabnzbd jellyfin ios iphone ipad android grapheneos mobile pwa dashboard helmarr nzb360</ExtraSearchTerms>
   <Requires>Unraid 7.2 or newer for the Unraid controls (containers, VMs, array). Everything else works on any version.</Requires>
   <Changes>
+### 1.4.1
+
+#### Fixed
+
+- Container updates no longer report "Request failed (HTTP 504)". Pulling a new image can take more than a minute, and Unraid's web server stops waiting while the update keeps running. Deckarr now treats this as "still updating", keeps checking until the container runs the new image (up to 10 minutes), and then reports it as updated. Check now handles a slow update check the same way.
+- The README and the Apps tab use real screenshots of every tab.
+
 ### 1.4.0
 
 #### New
@@ -64,7 +71,7 @@ The Unraid API key needs update access to Docker, VMs, Array and Notifications f
 
 - First public release.
   </Changes>
-  <Date>2026-10-31</Date>
+  <Date>2026-11-01</Date>
   <License>MIT</License>
   <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/home.jpg</Screenshot>
   <Screenshot>https://raw.githubusercontent.com/bjaane/deckarr/main/docs/library.jpg</Screenshot>

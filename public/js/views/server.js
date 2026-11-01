@@ -48,6 +48,9 @@ export function render(root, ctx) {
     let checkedAt = null;
     let updateFailures = [];
     let cannotApply = null; // set when this Unraid can report updates but not apply them
+    // Stops background waiting once the user leaves this tab.
+    let disposed = false;
+    ctx.onDispose(() => (disposed = true));
     const search = searchField('Search containers', (v) => {
       query = v;
       drawContainers();
@@ -186,7 +189,7 @@ export function render(root, ctx) {
           ),
         );
       } else if (updating) {
-        const { queue, index, current } = updating;
+        const { queue, index, current, waiting } = updating;
         nodes.push(
           h(
             'div',
@@ -196,7 +199,7 @@ export function render(root, ctx) {
               { class: 'panel' },
               h('div', { class: 'panel-title' }, light('active'), `Updating ${current} (${index + 1} of ${queue.length})`),
               bar(index / queue.length),
-              h('div', { class: 'panel-sub', text: 'Pulling the new image and restarting the container. Keep this page open.' }),
+              h('div', { class: 'panel-sub', text: waiting ? 'This is taking a while. Unraid is still working on it, and Deckarr is checking until it’s done.' : 'Pulling the new image and restarting the container. Keep this page open.' }),
             ),
           ),
         );
@@ -252,11 +255,41 @@ export function render(root, ctx) {
         const n = list?.filter((c) => c.isUpdateAvailable).length || 0;
         toast(n ? `${fmt.count(n, 'update')} available` : 'All containers are up to date');
       } catch (err) {
-        toast(err.message, 'bad');
+        if (err.stillRunning) {
+          // The check carries on in Unraid; pick up its result as it lands.
+          checkedAt = new Date();
+          toast('Unraid is still checking. New updates show up here in a minute or two.');
+          for (const ms of [15000, 45000, 90000, 150000]) setTimeout(() => !disposed && loadContainers(), ms);
+        } else {
+          toast(err.message, 'bad');
+        }
       } finally {
         checking = false;
         drawUpdates();
       }
+    }
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    // After Unraid stopped answering mid-update, watch the container until it runs the new image.
+    async function waitForUpdate(target) {
+      const name = cname(target);
+      const deadline = Date.now() + 10 * 60 * 1000;
+      while (Date.now() < deadline && !disposed) {
+        await sleep(5000);
+        let fresh;
+        try {
+          fresh = await unraid.containers(s);
+        } catch {
+          continue; // Unraid can be briefly busy while it recreates the container.
+        }
+        list = fresh.sort((a, b) => cname(a).localeCompare(cname(b), 'en', { sensitivity: 'base' }));
+        drawContainers();
+        // The container is recreated, so match it by name rather than id.
+        const c = list.find((x) => cname(x) === name);
+        if (c && !c.isUpdateAvailable && (c.state === 'RUNNING' || target.state !== 'RUNNING')) return true;
+      }
+      return false;
     }
 
     // One container at a time, so progress is visible and one failure doesn't stop the rest.
@@ -273,6 +306,13 @@ export function render(root, ctx) {
           await unraid.updateContainer(s, targets[i].id);
           done += 1;
         } catch (err) {
+          if (err.stillRunning) {
+            updating = { ...updating, waiting: true };
+            drawContainers();
+            if (await waitForUpdate(targets[i])) done += 1;
+            else if (!disposed) updateFailures.push({ name: cname(targets[i]), error: 'Unraid didn’t finish within 10 minutes. Check the container on the Docker tab in Unraid.' });
+            continue;
+          }
           updateFailures.push({ name: cname(targets[i]), error: err.message });
           // An API that can't update at all will fail the same way for every container.
           if (/needs Unraid API/.test(err.message)) {
