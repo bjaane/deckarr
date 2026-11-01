@@ -15,10 +15,10 @@ A free, self-hosted web app for your media server, made for phones and tablets: 
 | Home | Service status, the next 7 days of episodes, movies and albums, active downloads, and what's playing on Jellyfin |
 | Library | Browse Sonarr, Radarr and Lidarr. Search for releases, monitor titles or seasons, remove titles, add new series, movies and artists |
 | Activity | The *arr queue, qBittorrent (pause, resume, delete) and SABnzbd |
-| Server | Unraid array, CPU, RAM, CPU temperature and power, network traffic, UPS. Disks with temperatures and errors, shares, parity checks (start, pause, cancel, history), Unraid notifications (archive, delete), system logs. Containers: start, stop, restart, pause, update (one or all), details, ports and logs, filters and batch actions. VMs: start, shut down, pause, resume, restart, force stop. Jellyfin library scan, Prowlarr indexer status, health warnings |
+| Server | Unraid array, CPU, RAM, CPU temperature and power, network traffic, UPS. Disks with temperatures and errors, shares, parity checks (start, pause, cancel, history), Unraid notifications (archive, delete), system logs. Containers: start, stop, restart, pause, update (one or all), details, ports and logs, filters and batch actions. VMs: start, shut down, pause, resume, restart, force stop. **Proxmox VE:** nodes with CPU, memory, load and uptime; VMs and LXC containers (start, shut down, restart, pause, stop, reset); storage, disk health, package updates, tasks and system log. Jellyfin library scan, Prowlarr indexer status, health warnings |
 | Settings | Add services, test connections, change the password |
 
-Supported services: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid 7.2+.
+Supported services: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin, Unraid 7.2+ and Proxmox VE 7+.
 
 API keys are stored only on the server (`/config/config.json`, mode 600). Your phone never sees them; it talks to Deckarr, and Deckarr talks to your services.
 
@@ -85,6 +85,7 @@ The Android back button closes open panels before it leaves a page.
 | SABnzbd | Config > General > Security > API Key (not the NZB key) |
 | qBittorrent | qBittorrent 5.2+: an API key from Tools > Options > Web UI. Older versions: Web UI username and password, or leave both blank if qBittorrent skips login for your subnet |
 | Jellyfin | Dashboard > API Keys > New API key |
+| Proxmox VE | Datacenter > Permissions > API Tokens > Add. Paste the whole token as `user@realm!tokenid=secret`, at the address `https://<host>:8006` with **Allow self-signed certificate** on. Give the token the **PVEAuditor** role on `/` to see everything and **PVEVMUser** to start and stop guests. Package updates also need **Sys.Modify** (for example **PVESysAdmin**). If **Privilege Separation** is on, the roles must be given to the token itself, not only to the user |
 | Unraid 7.2+ | Settings > Management Access > API Keys. Use the Admin role, or read access to everything plus update access to Docker, VMs, Array and Notifications (needed for container, VM, parity and notification actions) |
 
 ---

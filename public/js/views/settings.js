@@ -177,7 +177,7 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
       type: 'url',
       inputmode: 'url',
       value: existing?.url || '',
-      placeholder: `http://192.168.1.10:${meta.port}`,
+      placeholder: `${meta.scheme || 'http'}://192.168.1.10:${meta.port}`,
       autocomplete: 'off',
       autocapitalize: 'off',
       autocorrect: 'off',
@@ -185,13 +185,13 @@ function openServiceForm(ctx, existing, { onSaved } = {}) {
     });
     const secretAttrs = { autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' };
     const apiKey = meta.auth === 'apikey' || meta.apiKeyOption
-      ? h('input', { type: 'password', placeholder: existing?.hasApiKey ? 'Saved. Leave blank to keep it' : 'Paste the API key', ...secretAttrs })
+      ? h('input', { type: 'password', placeholder: existing?.hasApiKey ? 'Saved. Leave blank to keep it' : meta.keyPlaceholder || 'Paste the API key', ...secretAttrs })
       : null;
     const username = meta.auth === 'login' ? h('input', { type: 'text', value: existing?.username || '', placeholder: 'admin', ...secretAttrs }) : null;
     const password = meta.auth === 'login'
       ? h('input', { type: 'password', placeholder: existing?.hasPassword ? 'Saved. Leave blank to keep it' : 'Password', ...secretAttrs })
       : null;
-    const backupUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.backupUrl || '', placeholder: `http://tower.tailnet.ts.net:${meta.port}`, ...secretAttrs });
+    const backupUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.backupUrl || '', placeholder: `${meta.scheme || 'http'}://tower.tailnet.ts.net:${meta.port}`, ...secretAttrs });
     const webUrl = h('input', { type: 'url', inputmode: 'url', value: existing?.webUrl || '', placeholder: 'Same as the address above', ...secretAttrs });
     // Services that take either an API key or a sign-in (qBittorrent 5.2+).
     let authMode = meta.auth === 'apikey' || (meta.apiKeyOption && (existing ? existing.hasApiKey : true)) ? 'apikey' : 'login';

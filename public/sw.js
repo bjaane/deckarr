@@ -17,6 +17,7 @@ const SHELL = [
   'js/views/server.js',
   'js/views/settings.js',
   'js/views/unraid.js',
+  'js/views/proxmox.js',
   'icons/icon-192.png',
   'icons/apple-touch-icon.png',
 ];

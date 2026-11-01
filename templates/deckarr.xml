@@ -8,19 +8,20 @@
   <Privileged>false</Privileged>
   <Icon>https://raw.githubusercontent.com/bjaane/deckarr/main/public/icons/icon-512.png</Icon>
   <WebUI>http://[IP]:[PORT:8484]/</WebUI>
-  <Overview>Deckarr is a free web app for your media server, made for phones and tablets: iPhone, iPad, Android (including GrapheneOS) and any modern browser. Add it to your home screen and control Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid from one place: see what is coming up and downloading, add series, movies and artists, and manage torrents and Usenet downloads. For Unraid: check and apply container updates, start, stop and restart containers and VMs, watch CPU, memory, temperatures, disks, UPS and parity checks, read notifications and logs, and get Unraid alerts as push notifications on your phone. API keys stay on your server, and one password protects the app. After installing, open the WebUI on your phone, create a password, and add your services under Settings.</Overview>
+  <Overview>Deckarr is a free web app for your media server, made for phones and tablets: iPhone, iPad, Android (including GrapheneOS) and any modern browser. Add it to your home screen and control Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and Unraid from one place: see what is coming up and downloading, add series, movies and artists, and manage torrents and Usenet downloads. For Proxmox VE: start and stop VMs and LXC containers, and watch nodes, storage, disks, updates and tasks. For Unraid: check and apply container updates, start, stop and restart containers and VMs, watch CPU, memory, temperatures, disks, UPS and parity checks, read notifications and logs, and get Unraid alerts as push notifications on your phone. API keys stay on your server, and one password protects the app. After installing, open the WebUI on your phone, create a password, and add your services under Settings.</Overview>
   <Support>https://github.com/bjaane/deckarr/issues</Support>
   <Project>https://github.com/bjaane/deckarr</Project>
   <TemplateURL>https://raw.githubusercontent.com/bjaane/deckarr/main/templates/deckarr.xml</TemplateURL>
   <ReadMe>https://raw.githubusercontent.com/bjaane/deckarr/main/README.md</ReadMe>
   <Category>MediaApp:Video Tools:Utilities</Category>
-  <ExtraSearchTerms>sonarr radarr lidarr prowlarr bazarr qbittorrent sabnzbd jellyfin ios iphone ipad android grapheneos mobile pwa dashboard helmarr nzb360</ExtraSearchTerms>
-  <Requires>Unraid 7.2 or newer for the Unraid controls (containers, VMs, array). Everything else works on any version.</Requires>
+  <ExtraSearchTerms>sonarr radarr lidarr prowlarr bazarr qbittorrent sabnzbd jellyfin proxmox pve lxc ios iphone ipad android grapheneos mobile pwa dashboard helmarr nzb360</ExtraSearchTerms>
+  <Requires>Unraid 7.2 or newer for the Unraid controls (containers, VMs, array). Proxmox VE 7 or newer for the Proxmox controls. Everything else works on any version.</Requires>
   <Changes>
 ### 1.5.0
 
 #### New
 
+- Proxmox VE support. Add Proxmox under Settings with an API token. The Server tab shows each node (CPU, memory, load, root disk, uptime) and all VMs and LXC containers with Start, Shut down, Restart, Pause, Resume, Stop and Reset. Manage has storage, disk health (SMART), package updates, recent tasks with their logs, and the system log. Proxmox VE 7 or newer.
 - Push notifications for Unraid alerts. Turn them on per device in Settings &gt; Notifications and choose Alerts, Warnings or Everything. The Deckarr server checks Unraid every minute and sends new notifications straight to your phone's push service, even when Deckarr is closed. Tapping one opens Unraid's notification list. Works on iPhone and iPad (iOS 16.4+, added to the Home Screen), Android and desktop browsers. Needs Deckarr to be opened over https://, for example through Tailscale Serve.
 
 ### 1.4.1

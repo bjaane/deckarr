@@ -11,13 +11,13 @@ export class ValidationError extends Error {
 
 const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 
-function normalizeUrl(value, label, required) {
+function normalizeUrl(value, label, required, scheme = 'http') {
   let v = str(value, 2048).trim();
   if (!v) {
     if (required) throw new ValidationError(`Enter the ${label.toLowerCase()}.`);
     return '';
   }
-  if (!/^https?:\/\//i.test(v)) v = `http://${v}`;
+  if (!/^https?:\/\//i.test(v)) v = `${scheme}://${v}`;
   let url;
   try {
     url = new URL(v);
@@ -42,9 +42,9 @@ function normalize(input, existing) {
   const service = {
     type,
     name: str(pick('name'), 40).trim() || meta.label,
-    url: normalizeUrl(pick('url'), 'Address', true),
-    backupUrl: normalizeUrl(pick('backupUrl'), 'Backup address', false),
-    webUrl: normalizeUrl(pick('webUrl'), 'Web UI address', false),
+    url: normalizeUrl(pick('url'), 'Address', true, meta.scheme),
+    backupUrl: normalizeUrl(pick('backupUrl'), 'Backup address', false, meta.scheme),
+    webUrl: normalizeUrl(pick('webUrl'), 'Web UI address', false, meta.scheme),
     insecure: Boolean(pick('insecure')),
   };
 
@@ -62,6 +62,13 @@ function normalize(input, existing) {
   } else {
     service.apiKey = input.apiKey !== undefined && input.apiKey !== '' ? str(input.apiKey, 512).trim() : existing?.apiKey || '';
     if (!service.apiKey) throw new ValidationError('Enter the API key.');
+    if (type === 'proxmox') {
+      // Accept the token with or without the header prefix Proxmox shows in some guides.
+      service.apiKey = service.apiKey.replace(/^PVEAPIToken=/i, '');
+      if (!/^[^\s!@]+@[^\s!]+![^\s=]+=\S+$/.test(service.apiKey)) {
+        throw new ValidationError('Paste the whole Proxmox token as user@realm!tokenid=secret, for example root@pam!deckarr=1234abcd-….');
+      }
+    }
   }
   return service;
 }

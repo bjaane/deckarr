@@ -40,7 +40,7 @@ export function rawRequest(urlStr, { method = 'GET', headers = {}, body = null, 
         }
         chunks.push(chunk);
       });
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+      res.on('end', () => resolve({ status: res.statusCode, statusText: res.statusMessage, headers: res.headers, body: Buffer.concat(chunks) }));
       res.on('error', reject);
     });
     if (connectTimeout) {
@@ -146,6 +146,9 @@ async function callAt(service, baseUrl, { method = 'GET', path = '/', query = ''
     case 'sabnzbd':
       url.searchParams.set('apikey', service.apiKey || '');
       if (!url.searchParams.has('output')) url.searchParams.set('output', 'json');
+      break;
+    case 'proxmox':
+      headers.authorization = `PVEAPIToken=${service.apiKey || ''}`;
       break;
     case 'jellyfin':
       headers.authorization = `MediaBrowser Client="Deckarr", Device="Deckarr server", DeviceId="deckarr-server", Version="1.0.0", Token="${service.apiKey || ''}"`;
@@ -283,6 +286,9 @@ export async function testService(service, timeout = 8000) {
       case 'jellyfin':
         if (!json) return fail("This address doesn't look like Jellyfin.");
         return ok(json.Version, json.ServerName);
+      case 'proxmox':
+        if (!json?.data?.version) return fail("This address doesn't look like the Proxmox VE API. Use https://<host>:8006.");
+        return ok(json.data.version, json.data.release ? `Proxmox VE ${json.data.release}` : null);
       case 'bazarr':
         if (!json) return fail("This address doesn't look like Bazarr.");
         return ok(json.data?.bazarr_version);

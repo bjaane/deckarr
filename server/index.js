@@ -203,6 +203,11 @@ async function proxy(req, res, serviceId, subpath, url) {
   }
 
   const { status } = upstream;
+  // Proxmox answers 403 when the token works but lacks a permission for this one call.
+  if (status === 403 && service.type === 'proxmox') {
+    const reason = upstream.statusText && upstream.statusText !== 'Forbidden' ? ` (${upstream.statusText})` : '';
+    return sendJson(req, res, 403, { error: `The Proxmox token doesn’t have permission for this${reason}.`, upstreamStatus: status });
+  }
   if (status === 401 || status === 403) {
     return sendJson(req, res, 502, { error: credentialMessage(service), upstreamStatus: status });
   }

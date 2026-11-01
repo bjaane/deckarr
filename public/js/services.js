@@ -718,3 +718,37 @@ export const unraid = {
     return d.logFile;
   },
 };
+
+// ---------- Proxmox VE (REST API, API token) ----------
+
+const pveGet = (s, path) => call(s.id, `api2/json/${path}`).then((r) => r?.data);
+const pvePost = (s, path, form = {}) => call(s.id, `api2/json/${path}`, { method: 'POST', form }).then((r) => r?.data);
+const enc = encodeURIComponent;
+
+export const PVE_ACTIONS = {
+  qemu: ['start', 'shutdown', 'reboot', 'suspend', 'resume', 'stop', 'reset'],
+  lxc: ['start', 'shutdown', 'reboot', 'resume', 'stop'],
+};
+
+export const proxmox = {
+  nodes: (s) => pveGet(s, 'nodes'),
+  nodeStatus: (s, node) => pveGet(s, `nodes/${enc(node)}/status`),
+  // VMs and LXC containers on every node, without templates.
+  async guests(s) {
+    const list = (await pveGet(s, 'cluster/resources?type=vm')) || [];
+    return list.filter((g) => !g.template && (g.type === 'qemu' || g.type === 'lxc'));
+  },
+  guestAction(s, g, action) {
+    if (!PVE_ACTIONS[g.type]?.includes(action)) throw new Error('Unknown action');
+    return pvePost(s, `nodes/${enc(g.node)}/${g.type}/${g.vmid}/status/${action}`);
+  },
+  storage: (s, node) => pveGet(s, `nodes/${enc(node)}/storage`),
+  disks: (s, node) => pveGet(s, `nodes/${enc(node)}/disks/list`),
+  // Needs Sys.Modify on the node: a 403 means the token can't see package updates.
+  updates: (s, node) => pveGet(s, `nodes/${enc(node)}/apt/update`),
+  refreshUpdates: (s, node) => pvePost(s, `nodes/${enc(node)}/apt/update`),
+  tasks: (s, node, limit = 50) => pveGet(s, `nodes/${enc(node)}/tasks?limit=${limit}`),
+  taskLog: (s, node, upid, limit = 500) => pveGet(s, `nodes/${enc(node)}/tasks/${enc(upid)}/log?limit=${limit}`),
+  syslog: (s, node, limit = 500) => pveGet(s, `nodes/${enc(node)}/syslog?limit=${limit}`),
+};
+proxmox.guestStatus = (s, g) => pveGet(s, `nodes/${enc(g.node)}/${g.type}/${g.vmid}/status/current`);
