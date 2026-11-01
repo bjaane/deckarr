@@ -3,9 +3,11 @@
 A free, self-hosted web app for your media server, made for phones and tablets: iPhone and iPad, Android (including GrapheneOS), and any modern browser. It runs as one small container on Unraid and you add it to your home screen like a normal app.
 
 <p>
-  <img src="docs/home.png" width="250" alt="Home: what's coming up and downloading">
-  <img src="docs/library.png" width="250" alt="Library: TV series poster grid">
-  <img src="docs/server.png" width="250" alt="Server: Unraid array and containers">
+  <img src="docs/home.jpg" width="180" alt="Home: what's coming up and downloading">
+  <img src="docs/library.jpg" width="180" alt="Library: TV series poster grid">
+  <img src="docs/activity.jpg" width="180" alt="Activity: torrents and the download queue">
+  <img src="docs/server.jpg" width="180" alt="Server: Unraid containers and updates">
+  <img src="docs/settings.jpg" width="180" alt="Settings: connected services">
 </p>
 
 | Tab | What you can do |
