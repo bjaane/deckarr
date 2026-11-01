@@ -1,4 +1,4 @@
-// Turning Unraid push notifications on and off for this device.
+// Turning server push notifications (Unraid and Proxmox alerts) on and off for this device.
 
 import { api } from './api.js';
 import { platform, isInstalled } from './install.js';

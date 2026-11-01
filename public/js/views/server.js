@@ -547,7 +547,12 @@ export function render(root, ctx, params) {
   }
 
   // ---------- Proxmox VE ----------
-  for (const s of proxmoxes.filter(shown)) renderProxmox(root, ctx, s, { head, multiple: servers.length > 1 });
+  for (const s of proxmoxes.filter(shown)) {
+    // Opened from a push notification: show the sheet it's about (tasks, storage or disks).
+    const open = params?.get('server') === s.id || (servers.length === 1 && params?.has('open')) ? params.get('open') : null;
+    if (open) history.replaceState(history.state, '', `#/server?server=${encodeURIComponent(s.id)}`);
+    renderProxmox(root, ctx, s, { head, multiple: servers.length > 1, open });
+  }
 
   // ---------- Jellyfin ----------
   for (const s of jellyfins) {
