@@ -2,6 +2,14 @@
 
 A free, self-hosted dashboard for your media server. Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, qBittorrent, SABnzbd, Jellyfin and your server in one place, in any browser.
 
+<p>
+  <img src="docs/home.jpg" width="160" alt="Home">
+  <img src="docs/library.jpg" width="160" alt="Library">
+  <img src="docs/activity.jpg" width="160" alt="Activity">
+  <img src="docs/server.jpg" width="160" alt="Server">
+  <img src="docs/settings.jpg" width="160" alt="Settings">
+</p>
+
 ## Install
 
 ```bash
