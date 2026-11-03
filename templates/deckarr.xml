@@ -17,6 +17,10 @@
   <ExtraSearchTerms>sonarr radarr lidarr prowlarr bazarr qbittorrent sabnzbd jellyfin proxmox pve lxc ios iphone ipad android grapheneos mobile pwa dashboard helmarr nzb360</ExtraSearchTerms>
   <Requires>Unraid 7.2 or newer for the Unraid controls (containers, VMs, array). Proxmox VE 7 or newer for the Proxmox controls. Everything else works on any version.</Requires>
   <Changes>
+### 1.6.0
+
+- Desktop layout.
+
 ### 1.5.1
 
 - Push notifications for Proxmox VE.
@@ -36,11 +40,6 @@
 
 - Works on more devices and browsers.
 - Back button closes panels.
-
-### 1.3.0
-
-- Check for and apply container updates.
-- VM controls.
   </Changes>
   <Date>2026-11-03</Date>
   <License>MIT</License>
