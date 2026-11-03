@@ -319,6 +319,8 @@ export function openSheet({ title = '', tall = false, onClose } = {}) {
   let startY = null;
   let delta = 0;
   head.addEventListener('touchstart', (e) => {
+    // On large screens the panel is a centred dialog; dragging it down would misplace it.
+    if (window.matchMedia('(min-width: 1024px)').matches) return;
     startY = e.touches[0].clientY;
     delta = 0;
     panel.classList.add('dragging');
