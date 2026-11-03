@@ -152,6 +152,6 @@ $(ok "Deckarr is running in container ${CTID}")
   Update it later:         pct exec ${CTID} -- deckarr-update
 
   To control this Proxmox server from Deckarr, add Proxmox VE under
-  Settings > Add a service, with an API token (see the README).
+  Settings > Add a service, with an API token.
 
 EOF

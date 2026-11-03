@@ -1411,3 +1411,153 @@ a.row:active {
   margin-top: 0;
   margin-bottom: 8px;
 }
+
+/* ---------- computers and large tablets ---------- */
+/* A sidebar instead of the bottom tab bar, a wider page, and panels as centred dialogs. */
+
+@media (min-width: 1024px) {
+  :root {
+    --sidebar-w: 224px;
+  }
+
+  body {
+    padding-left: var(--sidebar-w);
+    padding-bottom: 40px;
+  }
+
+  body.gate-mode {
+    padding-left: 0;
+  }
+
+  .page {
+    max-width: 1080px;
+    padding: 0 40px;
+  }
+
+  .page-head {
+    padding-top: 36px;
+  }
+
+  .tabbar {
+    top: 0;
+    right: auto;
+    width: var(--sidebar-w);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 22px 14px;
+    border-top: 0;
+    border-right: 1px solid var(--line);
+  }
+
+  .tabbar::before {
+    content: "Deckarr";
+    display: flex;
+    align-items: center;
+    height: 40px;
+    margin: 0 0 18px;
+    padding-left: 46px;
+    background: url("../icons/icon-192.png") no-repeat 8px center / 28px 28px;
+    color: var(--text);
+    font: 700 19px/1 var(--font-display);
+  }
+
+  .tab {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    height: 44px;
+    padding: 0 12px;
+    border-radius: 10px;
+    color: var(--text-2);
+    font-size: 15px;
+  }
+
+  .tab:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .tab[aria-current="page"] {
+    background: var(--surface);
+    color: var(--accent);
+  }
+
+  .sheet,
+  .sheet.tall {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: calc(50% + var(--sidebar-w) / 2);
+    width: min(680px, calc(100vw - var(--sidebar-w) - 80px));
+    margin: 0;
+    border-radius: 18px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    transform: translate(-50%, -47%) scale(0.98);
+    transition: transform 0.22s ease, opacity 0.22s ease;
+  }
+
+  .sheet {
+    max-height: min(86vh, 900px);
+  }
+
+  .sheet.tall {
+    height: min(86vh, 900px);
+  }
+
+  .sheet.open {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+
+  .sheet-grab {
+    display: none;
+  }
+
+  .sheet-head {
+    padding-top: 14px;
+  }
+
+  .toast-root {
+    left: var(--sidebar-w);
+    bottom: 28px;
+  }
+
+  .shelf {
+    grid-auto-columns: 160px;
+    margin: 0;
+    padding: 2px 0 6px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 22px 16px;
+  }
+
+  .chips {
+    margin-right: 0;
+    margin-left: 0;
+    padding: 0;
+    flex-wrap: wrap;
+  }
+}
+
+/* Hover feedback for a mouse or trackpad. */
+@media (hover: hover) and (pointer: fine) {
+  button.row:hover,
+  a.row:hover,
+  .vm-row:hover {
+    background: color-mix(in srgb, var(--text) 5%, transparent);
+  }
+
+  .btn:hover:not(:disabled),
+  .chip:hover {
+    filter: brightness(1.12);
+  }
+
+  .tile:hover .poster {
+    transform: translateY(-2px);
+    transition: transform 0.15s ease;
+  }
+}
